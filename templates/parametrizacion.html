@@ -1,0 +1,171 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-10 mx-auto">
+        <h2 class="mb-4">Parametrización - Múltiples Galerías</h2>
+        
+        <div class="card">
+            <div class="card-header">
+                <h5>Galerías Comerciales (Comunas 1-6 + Nueva Galería)</h5>
+            </div>
+            <div class="card-body">
+                <div class="alert alert-info">
+                    <strong>Importante:</strong> Ingrese los datos de las 6 galerías existentes y la nueva galería. 
+                    El algoritmo genético optimizará cada una y seleccionará la mejor comuna para la nueva galería.
+                </div>
+                
+                <form id="parametrosForm" action="{{ url_for('parametrizacion') }}" method="POST">
+                    {% for i in range(1, 7) %}
+                    <div class="card mb-3">
+                        <div class="card-header">
+                            <h6>Galería {{ i }} - Comuna {{ i }}</h6>
+                        </div>
+                        <div class="card-body">
+                            <div class="row">
+                                <div class="col-md-4">
+                                    <input type="hidden" name="comuna_{{ i }}" value="{{ i }}">
+                                    <label for="tamLote{{ i }}" class="form-label">Tamaño del Lote (m²)</label>
+                                    <input type="number" class="form-control" id="tamLote{{ i }}" name="tam_lote_{{ i }}" required min="1000" max="10000">
+                                </div>
+                                <div class="col-md-4">
+                                    <label for="canPri{{ i }}" class="form-label">Vías Primarias</label>
+                                    <input type="number" class="form-control" id="canPri{{ i }}" name="can_pri_{{ i }}" required min="0" max="10">
+                                </div>
+                                <div class="col-md-4">
+                                    <label for="canSec{{ i }}" class="form-label">Vías Secundarias</label>
+                                    <input type="number" class="form-control" id="canSec{{ i }}" name="can_sec_{{ i }}" required min="0" max="10">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                    
+                    <div class="card mb-3">
+                        <div class="card-header">
+                            <h5>Nueva Galería (Comuna por determinar)</h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="row">
+                                <div class="col-md-4">
+                                    <label for="tamLote7" class="form-label">Tamaño del Lote (m²)</label>
+                                    <input type="number" class="form-control" id="tamLote7" name="tam_lote_7" required min="1000" max="10000">
+                                </div>
+                                <div class="col-md-4">
+                                    <label for="canPri7" class="form-label">Vías Primarias</label>
+                                    <input type="number" class="form-control" id="canPri7" name="can_pri_7" required min="0" max="10">
+                                </div>
+                                <div class="col-md-4">
+                                    <label for="canSec7" class="form-label">Vías Secundarias</label>
+                                    <input type="number" class="form-control" id="canSec7" name="can_sec_7" required min="0" max="10">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="card">
+                        <div class="card-header">
+                            <h5>Configuración de Pesos</h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="alert alert-info">
+                                <strong>Importante:</strong> La suma de los pesos debe ser igual al 100%
+                            </div>
+                            
+                            <div class="row">
+                                <div class="col-md-4">
+                                    <label for="pesoBS" class="form-label">Beneficio Social (%)</label>
+                                    <input type="number" class="form-control" id="pesoBS" name="peso_bs" value="50" min="0" max="100" required>
+                                </div>
+                                <div class="col-md-4">
+                                    <label for="pesoBE" class="form-label">Beneficio Económico (%)</label>
+                                    <input type="number" class="form-control" id="pesoBE" name="peso_be" value="10" min="0" max="100" required>
+                                </div>
+                                <div class="col-md-4">
+                                    <label for="pesoMUN" class="form-label">Margen Utilidad Neta (%)</label>
+                                    <input type="number" class="form-control" id="pesoMUN" name="peso_mun" value="40" min="0" max="100" required>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="d-grid mt-3">
+                        <button type="submit" class="btn btn-primary btn-lg">Ejecutar Algoritmo Genético en Todas las Galerías</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal de progreso -->
+{% if show_progress_modal %}
+<div class="modal fade show" id="progressModal" tabindex="-1" aria-labelledby="progressModalLabel" aria-hidden="false" style="display: block;">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title" id="progressModalLabel">Procesando 7 Galerías Comerciales</h5>
+            </div>
+            <div class="modal-body">
+                <div class="progress mb-3" style="height: 25px;">
+                    <div id="overallProgress" class="progress-bar progress-bar-striped progress-bar-animated" 
+                         role="progressbar" style="width: 0%">0%</div>
+                </div>
+                
+                <h6>Progreso por galería:</h6>
+                <div id="galleryProgress">
+                    {% for i in range(1, 8) %}
+                    <div class="mb-2">
+                        <div class="d-flex justify-content-between">
+                            <span>Galería {{ i }} {% if i <= 6 %}(Comuna {{ i }}){% else %}(Nueva){% endif %} - ROI: <span id="roi-{{ i }}">Calculando...</span></span>
+                            <span id="progress-text-{{ i }}">Pendiente</span>
+                        </div>
+                        <div class="progress" style="height: 15px;">
+                            <div id="progress-{{ i }}" class="progress-bar" 
+                                 role="progressbar" style="width: 0%"></div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+                
+                <div id="finalMessage" class="alert alert-info mt-3" style="display: none;">
+                    <i class="bi bi-check-circle"></i> Procesamiento completado. Redirigiendo a resultados...
+                </div>
+
+                <div id="bestComunaInfo" class="alert alert-success mt-3" style="display: none;">
+                    <i class="bi bi-star-fill"></i> <span id="bestComunaText"></span>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+<div class="modal-backdrop fade show"></div>
+
+<!-- Datos para JavaScript -->
+<div id="progressData" 
+     data-thread-id="{{ thread_id }}" 
+     data-total-galleries="7"
+     data-results-url="{{ url_for('resultados') }}"
+     style="display: none;">
+</div>
+
+{# --- Panel de logs fijo al fondo (solo cuando hay ejecución) --- #}
+<div id="logsDock"
+     class="fixed-bottom bg-dark text-light border-top border-secondary"
+     style="display: none;">
+  <div class="container py-2">
+    <div class="d-flex align-items-center mb-2">
+      <i class="bi bi-terminal me-2"></i>
+      <strong>Logs de ejecución</strong>
+      <span class="badge bg-secondary ms-2" id="execStatus">ejecutando</span>
+      <button class="btn btn-sm btn-outline-light ms-auto" id="clearLogs" type="button">Limpiar</button>
+    </div>
+    <pre id="logPre" class="mb-0" style="max-height:40vh; overflow:auto; white-space:pre-wrap;"></pre>
+  </div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block extra_js %}
+<script src="{{ url_for('static', filename='js/script.js') }}"></script>
+{% endblock %}

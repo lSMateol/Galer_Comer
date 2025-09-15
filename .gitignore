@@ -1,0 +1,16 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+.DS_Store
+
+# Entornos y secretos
+.env
+.env.*
+*.sqlite3
+
+# Bytecode / caches
+*.pyo
+*.pyd
+.pytest_cache/
+.mypy_cache/

@@ -1,0 +1,17 @@
+/* Estilos básicos para la aplicación */
+body {
+    font-family: Arial, sans-serif;
+}
+
+.card {
+    margin-bottom: 20px;
+}
+
+.progress {
+    margin: 20px 0;
+}
+
+#console {
+    font-family: 'Courier New', monospace;
+    font-size: 12px;
+}

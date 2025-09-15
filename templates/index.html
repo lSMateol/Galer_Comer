@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-8 mx-auto text-center">
+        <h1 class="display-4">Optimización de Galerías Comerciales</h1>
+        <p class="lead">Aplicación de algoritmos genéticos para la delimitación del tamaño y ubicación óptima de galerías comerciales</p>
+        
+        <div class="row mt-5">
+            <div class="col-md-4">
+                <div class="card h-100">
+                    <div class="card-body">
+                        <h5 class="card-title">Parametrización</h5>
+                        <p class="card-text">Configura los parámetros iniciales para la optimización</p>
+                        <a href="{{ url_for('parametrizacion') }}" class="btn btn-primary">Comenzar</a>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card h-100">
+                    <div class="card-body">
+                        <h5 class="card-title">Resultados</h5>
+                        <p class="card-text">Visualiza los resultados de las optimizaciones realizadas</p>
+                        <a href="#" class="btn btn-secondary">Ver resultados</a>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card h-100">
+                    <div class="card-body">
+                        <h5 class="card-title">Comparativo</h5>
+                        <p class="card-text">Compara diferentes escenarios y configuraciones</p>
+                        <a href="#" class="btn btn-secondary">Comparar</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="row"><div class="col-12">
+
+  {% if error %}
+    <div class="alert alert-danger">Error<br>{{ error }}</div>
+  {% endif %}
+
+  {% if ejecuciones and ejecuciones|length > 0 %}
+    <div class="card">
+      <div class="card-header"><h5>Historial de Ejecuciones</h5></div>
+      <div class="card-body table-responsive">
+        <table class="table table-sm align-middle">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>run_id</th>
+              <th>Comuna</th>
+              <th>ROI %</th>
+              <th>Utilidad</th>
+              <th>Acciones</th>
+            </tr>
+          </thead>
+          <tbody>
+          {% for e in ejecuciones %}
+            <tr>
+              <td>{{ loop.index }}</td>
+              <td class="text-truncate" style="max-width:240px">{{ e.run_id or '—' }}</td>
+              <td>{{ e.comuna }}</td>
+              <td>{{ "%.2f"|format(e.roi or 0) }}</td>
+              <td>$ {{ "{:,.2f}".format(e.utilidad_neta_usd or 0) }}</td>
+              <td>
+                <a href="{{ url_for('detalle_ejecucion', ejecucion_id=e.id) }}"
+                   class="btn btn-sm btn-outline-primary">Detalle</a>
+              </td>
+            </tr>
+          {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  {% else %}
+    <div class="alert alert-info">
+      No hay ejecuciones guardadas. Realice una ejecución para generar historial.
+    </div>
+    <a href="{{ url_for('parametrizacion') }}" class="btn btn-primary">Nueva Ejecución</a>
+  {% endif %}
+
+</div></div>
+{% endblock %}

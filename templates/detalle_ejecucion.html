@@ -1,0 +1,113 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="row"><div class="col-12">
+
+  {% if error %}
+    <div class="alert alert-danger">
+      <h4>Error</h4><p>{{ error }}</p>
+      <a href="{{ url_for('historial') }}" class="btn btn-secondary mt-2">Volver</a>
+    </div>
+  {% else %}
+
+  <div class="d-flex align-items-center justify-content-between mb-3">
+    <h2 class="mb-0">Detalle de Ejecución</h2>
+  </div>
+  {% if params %}
+  <div class="card mb-3">
+    <div class="card-header"><h5>Parámetros</h5></div>
+    <div class="card-body">
+      <div class="row g-3">
+        <div class="col-md-2"><strong>population_size:</strong> {{ params.population_size }}</div>
+        <div class="col-md-2"><strong>max_generations:</strong> {{ params.max_generations }}</div>
+        <div class="col-md-2"><strong>elite_percentage:</strong> {{ params.elite_percentage }}</div>
+        <div class="col-md-2"><strong>mutation_rate:</strong> {{ params.mutation_rate }}</div>
+        <div class="col-md-2"><strong>sigma_factor:</strong> {{ params.sigma_factor }}</div>
+        <div class="col-md-2"><strong>crossover_rate:</strong> {{ params.crossover_rate }}</div>
+      </div>
+      {% if params.weights %}
+      <div class="mt-2"><strong>weights (BE, BS, MUN):</strong> {{ params.weights }}</div>
+      {% endif %}
+    </div>
+  </div>
+  {% endif %}
+
+  <div class="card mb-3">
+    <div class="card-header bg-light"><h5>Datos generales</h5></div>
+    <div class="card-body">
+      <div class="row g-3">
+        <div class="col-md-3"><strong>Galería:</strong> {{ ejecucion.comuna }}</div>
+        <div class="col-md-3"><strong>Lote (m²):</strong> {{ "{:,.0f}".format(ejecucion.tam_lote_m2 or 0) }}</div>
+        <div class="col-md-3"><strong>Locales primarios:</strong> {{ ejecucion.can_pri_unidades or 0 }}</div>
+        <div class="col-md-3"><strong>Locales secundarios:</strong> {{ ejecucion.can_sec_unidades or 0 }}</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card mb-3">
+    <div class="card-header bg-dark text-white"><h5>KPIs</h5></div>
+    <div class="card-body">
+      <div class="row text-center">
+        <div class="col-md-3">
+          <div class="border rounded p-3">
+            <div class="small text-muted">ROI</div>
+            <div class="h4 mb-0">{{ "%.2f"|format(ejecucion.roi or 0) }}%</div>
+          </div>
+        </div>
+        <div class="col-md-3">
+          <div class="border rounded p-3">
+            <div class="small text-muted">Utilidad neta</div>
+            <div class="h4 mb-0">$ {{ "{:,.2f}".format(ejecucion.utilidad_neta_usd or 0) }}</div>
+          </div>
+        </div>
+        <div class="col-md-3">
+          <div class="border rounded p-3">
+            <div class="small text-muted">Inversión inicial</div>
+            <div class="h4 mb-0">$ {{ "{:,.2f}".format(ejecucion.inv_inicial_usd or 0) }}</div>
+          </div>
+        </div>
+        <div class="col-md-3">
+          <div class="border rounded p-3">
+            <div class="small text-muted">Margen utilidad</div>
+            <div class="h4 mb-0">{{ "{:.2%}".format(ejecucion.margen_utilidad or 0) }}</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="row text-center mt-3">
+        <div class="col-md-3">
+          <div class="border rounded p-3">
+            <div class="small text-muted">Empleos</div>
+            <div class="h4 mb-0">{{ ejecucion.empleos_directos or 0 }}</div>
+          </div>
+        </div>
+        <div class="col-md-3">
+          <div class="border rounded p-3">
+            <div class="small text-muted">Beneficio social</div>
+            <div class="h4 mb-0">{{ "{:.4f}".format(ejecucion.beneficio_social or 0) }}</div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <div class="card mb-4">
+    <div class="card-header"><h5>Cromosoma óptimo</h5></div>
+    <div class="card-body">
+      {% if ejecucion.cromosoma_optimo %}
+        <pre class="small" style="white-space:pre-wrap">{{ ejecucion.cromosoma_optimo }}</pre>
+      {% else %}
+        <p class="text-muted">Sin cromosoma almacenado.</p>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="d-flex gap-2 justify-content-end">
+    {# <a href="{{ url_for('corrida', run_id=run_id) }}" class="btn btn-outline-secondary">Volver a corrida</a> #}
+    <a href="{{ url_for('historial') }}" class="btn btn-secondary">Historial</a>
+  </div>
+
+  {% endif %}
+
+</div></div>
+{% endblock %}

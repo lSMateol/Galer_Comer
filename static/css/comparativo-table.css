@@ -1,0 +1,45 @@
+/* Estilo general de la tabla comparativa */
+.tabla-comparativo {
+  font-size: 0.9rem;
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+/* Cabecera fija y con sombra sutil */
+.sticky-header th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: #f1f3f5; /* combina con .table-secondary */
+  box-shadow: 0 1px 0 rgba(0,0,0,.05);
+  white-space: nowrap;
+}
+
+/* Rayado y hover ya vienen de Bootstrap; aumentamos contraste sutil */
+.table-striped > tbody > tr:nth-of-type(odd) > * {
+  background-color: rgba(0,0,0,.015);
+}
+
+/* Alineación de números a la derecha (ya usamos .text-end, reforzamos) */
+.tabla-comparativo td.text-end,
+.tabla-comparativo th.text-end {
+  text-align: right !important;
+  font-variant-numeric: tabular-nums; /* columnas más parejas */
+}
+
+/* Más respiración en celdas */
+.tabla-comparativo td, .tabla-comparativo th {
+  padding: .5rem .6rem;
+}
+
+/* Caja de gráficos: altura consistente sin forzar inline styles en todos */
+.chart-box {
+  height: 320px;
+}
+
+/* Botón CSV más discreto en header claro */
+.card-header .btn-outline-secondary {
+  --bs-btn-padding-y: .15rem;
+  --bs-btn-padding-x: .5rem;
+  --bs-btn-font-size: .85rem;
+}
