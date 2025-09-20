@@ -464,6 +464,9 @@ def procesar_todas_galerias(app, thread_id, galerias_a_procesar,
                             poblacion_inicial=population_size,
                             generaciones=max_generations,
                             tasa_mutacion=mutation_rate,
+                            porcentaje_elite=elite_percentage,
+                            fuerza_sigma=sigma_factor,
+                            tasa_cruzamiento=crossover_rate,
 
                             mejor_fitness=best_fitness,
                             inv_inicial_usd=best_metrics.get('i_InvIni', 0.0),
@@ -600,6 +603,9 @@ def procesar_todas_galerias(app, thread_id, galerias_a_procesar,
                         poblacion_inicial=population_size,
                         generaciones=max_generations,
                         tasa_mutacion=mutation_rate,
+                        porcentaje_elite=elite_percentage,
+                        fuerza_sigma=sigma_factor,
+                        tasa_cruzamiento=crossover_rate,
 
                         mejor_fitness=best_fitness_7,
                         inv_inicial_usd=best_metrics_7.get('i_InvIni', 0.0),
@@ -754,13 +760,22 @@ def resultados():
     if thread_id and 'EXECUTION_LOGS' in app.config:
         logs = app.config['EXECUTION_LOGS'].get(thread_id, [])
 
-    # 4) Resumen del worker en memoria (back-compat con tu UI actual)
+    # 4) KPIs de la mejor solución (desde BD, mejor ROI del run_id)
     resumen_worker = None
-    if 'RESULTS' in app.config and thread_id in app.config['RESULTS']:
-        resumen_worker = app.config['RESULTS'][thread_id]
-        # No lo borramos aquí para no perderlo en recargas del modal
+    if ejecuciones:
+        mejor_fila_global = max(ejecuciones, key=lambda e: (e.roi or 0))
+        resumen_worker = {
+            "best_metrics": {
+                # mismas llaves que usas en el template actual
+                "u_UtNeGa": mejor_fila_global.utilidad_neta_usd or 0,
+                "u_ROIGal": mejor_fila_global.roi or 0,
+                "u_BenSoc": mejor_fila_global.beneficio_social or 0,
+            },
+            "best_chromosome": mejor_fila_global.cromosoma_optimo or [],
+            "best_fitness": mejor_fila_global.mejor_fitness or 0,
+        }
 
-    # 5) KPIs útiles: mejor ROI entre 1..6
+    # 5) KPIs útiles: mejor ROI entre 1..6 (para “mejor comuna” de las existentes)
     mejor_comuna, mejor_roi = None, None
     if ejecuciones:
         base = [e for e in ejecuciones if e.comuna and e.comuna <= 6]
@@ -777,10 +792,11 @@ def resultados():
         ejecuciones=ejecuciones,   # 0..7 filas por run_id
         params=params,             # parámetros usados
         logs=logs,                 # progreso del modal
-        resumen_worker=resumen_worker,  # métricas/cromosoma/fitness en memoria
+        resumen_worker=resumen_worker,  # ahora viene de la BD
         mejor_comuna=mejor_comuna,
         mejor_roi=mejor_roi
     )
+
 
 def run_genetic_algorithm(app, thread_id, user_inputs, constants, 
                          population_size, max_generations, elite_percentage,
@@ -1132,10 +1148,10 @@ def detalle_ejecucion(ejecucion_id):
         params = {
             "population_size": getattr(e, 'poblacion_inicial', None),
             "max_generations": getattr(e, 'generaciones', None),
-            "elite_percentage": getattr(e, 'elite_percentage', None),
+            "elite_percentage": getattr(e, 'porcentaje_elite', None),
             "mutation_rate": getattr(e, 'tasa_mutacion', None),
-            "sigma_factor": getattr(e, 'sigma_factor', None),
-            "crossover_rate": getattr(e, 'crossover_rate', None),
+            "sigma_factor": getattr(e, 'fuerza_sigma', None),
+            "crossover_rate": getattr(e, 'tasa_cruzamiento', None),
             "weights": (getattr(e, 'peso_be', None),
                         getattr(e, 'peso_bs', None),
                         getattr(e, 'peso_mun', None))
@@ -1181,7 +1197,7 @@ def comparativo():
     be_egr_ope   = []; be_egr_adm   = []; be_egr_leg   = []; be_egr_imp  = []
     bs_acces     = []; bs_emp_dir   = []; bs_emp_ind   = []; bs_calidad  = []
     ar_af        = []; ar_cp        = []; ar_nal       = []; ar_sc       = []
-    idx_mun      = []; idx_bc       = []; idx_bs_idx      = []
+    idx_mun      = []; idx_bc       = []; idx_bs_idx      = []; idx_fitness = []
 
     for e in ejecuciones:
         # trae su detalle (1–a–1). Si definiste relationship one-to-one "detalles" como lista, ajusta:
@@ -1241,6 +1257,7 @@ def comparativo():
             bc = 0
         idx_bc.append(bc)
         idx_bs_idx.append( z(e.beneficio_social) )
+        idx_fitness.append( z(e.mejor_fitness) )
 
         def pick(seq, i):
             try:
@@ -1293,7 +1310,8 @@ def comparativo():
                 # Índices
                 "idx_mun":     pick(idx_mun, i),
                 "idx_bc":      pick(idx_bc, i),
-                "idx_bs_idx":     pick(idx_bs_idx, i),
+                "idx_bs_idx":  pick(idx_bs_idx, i),
+                "idx_fitness": pick(idx_fitness, i),
             }
             tabla_rows.append(fila)
 
@@ -1310,7 +1328,7 @@ def comparativo():
         be_egr_ope=be_egr_ope, be_egr_adm=be_egr_adm, be_egr_leg=be_egr_leg, be_egr_imp=be_egr_imp,
         bs_acces=bs_acces, bs_emp_dir=bs_emp_dir, bs_emp_ind=bs_emp_ind, bs_calidad=bs_calidad,
         ar_af=ar_af, ar_cp=ar_cp, ar_nal=ar_nal, ar_sc=ar_sc,
-        idx_mun=idx_mun, idx_bc=idx_bc, idx_bs_idx=idx_bs_idx, tabla_rows=tabla_rows
+        idx_mun=idx_mun, idx_bc=idx_bc, idx_bs_idx=idx_bs_idx, idx_fitness=idx_fitness,tabla_rows=tabla_rows
     )
 
 @app.route('/como-usar')

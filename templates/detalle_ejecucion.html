@@ -83,7 +83,13 @@
         <div class="col-md-3">
           <div class="border rounded p-3">
             <div class="small text-muted">Beneficio social</div>
-            <div class="h4 mb-0">{{ "{:.4f}".format(ejecucion.beneficio_social or 0) }}</div>
+            <div class="h4 mb-0">{{ "{:.3f}".format(ejecucion.beneficio_social or 0) }}</div>
+          </div>
+        </div>
+        <div class="col-md-3">
+          <div class="border rounded p-3">
+            <div class="small text-muted">Fitness</div>
+            <div class="h4 mb-0">{{ "{:.2f}".format(ejecucion.mejor_fitness or 0) }}</div>
           </div>
         </div>
       </div>

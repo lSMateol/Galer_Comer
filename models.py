@@ -26,6 +26,9 @@ class Ejecucion(db.Model):
     poblacion_inicial = db.Column(db.Integer, nullable=False)
     generaciones = db.Column(db.Integer, nullable=False)
     tasa_mutacion = db.Column(db.Float, nullable=False)
+    porcentaje_elite = db.Column(db.Float, nullable=True)   
+    fuerza_sigma = db.Column(db.Float, nullable=True)        
+    tasa_cruzamiento = db.Column(db.Float, nullable=True) 
     
     # ------------------
     #  Resultados
@@ -109,4 +112,4 @@ class EjecucionDetalle(db.Model):
     ejecucion = db.relationship('Ejecucion', back_populates='detalles')
 
     def __repr__(self):
-        return f"<EjecucionDetalle id={self.id} ejecucion_id={self.ejecucion_id} fecha={self.fecha_ejecucion}>"
+        return f"<EjecucionDetalle id={self.id} ejecucion_id={self.ejecucion_id}>"

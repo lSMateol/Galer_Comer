@@ -18,7 +18,7 @@
       </div>
     {% endif %}
 
-    {# ====== TABLA (ahora va arriba) ====== #}
+    {# ====== TABLA  ====== #}
     <div class="card mb-4">
       <div class="card-header bg-light d-flex justify-content-between align-items-center">
         <h5 class="mb-0">Tabla de datos (todas las métricas)</h5>
@@ -32,7 +32,8 @@
               <thead class="table-secondary sticky-header">
                 <tr>
                   <th>Comuna</th>
-
+                  
+                  <th class="text-end">Fitness</th>
                   <th class="text-end">Inv. total</th>
                   <th class="text-end">Inv. locales</th>
                   <th class="text-end">Inv. parq.</th>
@@ -72,7 +73,8 @@
                 {% for r in tabla_rows %}
                 <tr>
                   <td>{{ r.label }}</td>
-
+                  
+                  <td class="text-end" data-order="{{ r.idx_fitness or 0 }}">{{ '{:,.3f}'.format(r.idx_fitness or 0) }}</td>
                   <td class="text-end" data-order="{{ r.inv_total or 0 }}">{{ '{:,.0f}'.format(r.inv_total or 0) }}</td>
                   <td class="text-end" data-order="{{ r.inv_loc   or 0 }}">{{ '{:,.0f}'.format(r.inv_loc   or 0) }}</td>
                   <td class="text-end" data-order="{{ r.inv_parq  or 0 }}">{{ '{:,.0f}'.format(r.inv_parq  or 0) }}</td>
@@ -255,7 +257,8 @@
       "ar_sc":        {{ ar_sc|tojson|safe }},
       "idx_mun":      {{ idx_mun|tojson|safe }},
       "idx_bc":       {{ idx_bc|tojson|safe }},
-      "idx_bs_idx":   {{ idx_bs_idx|tojson|safe }}
+      "idx_bs_idx":   {{ idx_bs_idx|tojson|safe }},
+      "idx_fitness":  {{ idx_fitness|tojson|safe }}
     }
   </script>
 

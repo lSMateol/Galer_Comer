@@ -77,7 +77,7 @@
                   <th>Utilidad Neta</th>
                   <th>Inversión Inicial</th>
                   <th>Margen</th>
-                  <th>Empleos</th>
+                  <th>Fitness</th>
                   <th>Beneficio Social</th>
                   <th>Acciones</th>
                 </tr>
@@ -92,7 +92,7 @@
                   <td>$ {{ "{:,.2f}".format(e.utilidad_neta_usd or 0) }}</td>
                   <td>$ {{ "{:,.2f}".format(e.inv_inicial_usd or 0) }}</td>
                   <td>{{ "{:.2%}".format(e.margen_utilidad or 0) }}</td>
-                  <td>{{ e.empleos_directos or 0 }}</td>
+                  <td>{{ "{:.4f}".format(e.mejor_fitness) or 0 }}</td>
                   <td>{{ "{:.4f}".format(e.beneficio_social or 0) }}</td>
                   <td class="d-flex gap-2">
                     <a href="{{ url_for('detalle_ejecucion', ejecucion_id=e.id) }}" 

@@ -61,6 +61,7 @@ window.__cmpInit = function () {
   const idx_mun = normSeries("idx_mun");
   const idx_bc  = normSeries("idx_bc");
   const idx_bs_idx = normSeries("idx_bs_idx");
+  const idx_fitness = normSeries("idx_fitness");
 
   // Helpers Chart.js
   function ctx(id) {
@@ -200,9 +201,10 @@ window.__cmpInit = function () {
     );
   }
 
-  makeMultiBar("chartIndices", [
+  makeRadar("chartIndices", [
     { label: "MUN", data: idx_mun },
     { label: "B/C", data: idx_bc },
-    { label: "Benef. social", data: idx_bs_idx }
+    { label: "Benef. social", data: idx_bs_idx },
+    { label: "Fitness", data: idx_fitness }
   ]);
 };
