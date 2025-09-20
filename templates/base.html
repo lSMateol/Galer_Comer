@@ -8,6 +8,10 @@
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet" />
   <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}" />
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" />
+  <link href="https://unpkg.com/aos@2.3.1/dist/aos.css" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/home.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/tema.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/theme-toggle.css') }}">
 </head>
 
 <body>
@@ -25,7 +29,13 @@
           <li class="nav-item"><a class="nav-link" href="{{ url_for('parametrizacion') }}">Parametrización</a></li>
           <li class="nav-item"><a class="nav-link" href="{{ url_for('historial') }}">Historial</a></li>
           <li class="nav-item"><a class="nav-link" href="{{ url_for('comparativo') }}">Comparativo</a></li>
+          <li class="nav-item"><a class="nav-link" href="{{ url_for('como_usar') }}">Cómo usar</a></li>
+          <li class="nav-item"><a class="nav-link" href="{{ url_for('legal') }}">legal</a></li>
         </ul>
+        <div class="form-check form-switch ms-auto me-3 d-flex align-items-center">
+        <input class="form-check-input" type="checkbox" id="themeSwitch" />
+        <label class="form-check-label text-light ms-2 small" for="themeSwitch">Modo</label>
+        </div>
       </div>
     </div>
   </nav>
@@ -33,42 +43,98 @@
   <main class="container my-4">
     {% block content %}{% endblock %}
   </main>
+<!-- FOOTER RESPONSIVE -->
+<footer class="bg-dark text-light pt-5 pb-4">
+  <div class="container">
+    <div class="row g-4 text-center text-lg-start">
 
-  <footer class="bg-dark text-light py-4 mt-5">
-    <div class="container">
-      <div class="row">
-        <div class="col-md-6">
-          <h5>Universidad de Cundinamarca</h5>
-          <p>Aplicativo Web para la Delimitación del Tamaño y Localización de Galerías Comerciales</p>
-        </div>
-        <div class="col-md-3">
-          <h5>Navegación</h5>
-          <ul class="list-unstyled">
-            <li><a href="{{ url_for('index') }}" class="text-light">Inicio</a></li>
-            <li><a href="{{ url_for('parametrizacion') }}" class="text-light">Parametrización</a></li>
-            <li><a href="{{ url_for('historial') }}" class="text-light">Historial</a></li>
-            <li><a href="{{ url_for('comparativo') }}" class="text-light">Comparativo</a></li>
-          </ul>
-        </div>
-        <div class="col-md-3">
-          <h5>Información Legal</h5>
-          <ul class="list-unstyled">
-            <li><a href="#" class="text-light">Política de Privacidad</a></li>
-            <li><a href="#" class="text-light">Términos de Servicio</a></li>
-          </ul>
-        </div>
+      <!-- Logo / descr (ocupa 12 en móvil, 6 en tablet, 4 en desktop) -->
+      <div class="col-12 col-md-6 col-lg-4">
+        <img src="{{ url_for('static', filename='images/logo.png') }}" alt="Logo" height="40" class="mb-3">
+        <p class="small">
+          Aplicativo Web para la Delimitación del Tamaño y Localización de Galerías Comerciales.<br>
+          <span class="text-muted">Universidad de Cundinamarca &copy; 2025</span>
+        </p>
       </div>
-      <div class="text-center mt-3">
-        <p>&copy; Universidad de Cundinamarca 2025</p>
+
+      <!-- Navegación (6/12 → 3/12) -->
+      <div class="col-12 col-md-6 col-lg-2">
+        <h6 class="fw-bold mb-3">Navegación</h6>
+        <ul class="list-unstyled small">
+          <li class="mb-2"><a href="{{ url_for('index') }}" class="text-light text-decoration-none">Inicio</a></li>
+          <li class="mb-2"><a href="{{ url_for('parametrizacion') }}" class="text-light text-decoration-none">Parametrización</a></li>
+          <li class="mb-2"><a href="{{ url_for('historial') }}" class="text-light text-decoration-none">Historial</a></li>
+          <li class="mb-2"><a href="{{ url_for('comparativo') }}" class="text-light text-decoration-none">Comparativo</a></li>
+          <li class="mb-2"><a href="{{ url_for('como_usar') }}" class="text-light text-decoration-none">Cómo usar</a></li>
+        </ul>
+      </div>
+
+      <!-- Legal (6/12 → 2/12) -->
+      <div class="col-12 col-md-6 col-lg-2">
+        <h6 class="fw-bold mb-3">Legal</h6>
+        <ul class="list-unstyled small">
+          <li class="mb-2"><a href="{{ url_for('legal') }}" class="text-light text-decoration-none">Términos, Privacidad y Contacto</a></li>
+        </ul>
+      </div>
+
+      <!-- Contacto (12/12 → 4/12) -->
+      <div class="col-12 col-md-6 col-lg-4">
+        <h6 class="fw-bold mb-3">Contacto</h6>
+        <ul class="list-unstyled small">
+          <li class="mb-2"><i class="bi bi-envelope me-2"></i><a href="mailto:proyecto@galer-comer.edu.co" class="text-light text-decoration-none">proyecto@galer-comer.edu.co</a></li>
+          <li class="mb-2"><i class="bi bi-geo-alt me-2"></i>Universidad de Cundinamarca - Soacha</li>
+          <li><i class="bi bi-clock me-2"></i>Lun - Vie: 8:00-17:00</li>
+        </ul>
+
+        <!-- Redes centradas en móvil -->
+        <div class="mt-3 d-flex justify-content-center justify-content-lg-start">
+          <a href="#" class="text-light me-3 fs-5"><i class="bi bi-facebook"></i></a>
+          <a href="#" class="text-light me-3 fs-5"><i class="bi bi-twitter-x"></i></a>
+          <a href="#" class="text-light me-3 fs-5"><i class="bi bi-linkedin"></i></a>
+          <a href="#" class="text-light fs-5"><i class="bi bi-github"></i></a>
+        </div>
       </div>
     </div>
-  </footer>
+
+    <hr class="my-4 text-muted">
+
+    <!-- Copyright centrado en móvil, alineado en desktop -->
+    <div class="d-flex flex-column flex-md-row justify-content-between align-items-center small text-center text-md-start">
+      <div class="text-muted mb-2 mb-md-0">© 2025 Universidad de Cundinamarca. Todos los derechos reservados.</div>
+      <div class="text-muted">Versión 1.0 · <a href="https://github.com/lSMateol/Galer_Comer" class="text-muted text-decoration-none" target="_blank">Repositorio GitHub</a></div>
+    </div>
+  </div>
+</footer>
 
   <!-- JS comunes del sitio -->
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
   <script src="{{ url_for('static', filename='js/script.js') }}"></script>
-
+  <script src="https://unpkg.com/aos@2.3.1/dist/aos.js"></script>
+<script>
+  AOS.init({
+    duration: 800,
+    once: true
+  });
+</script>
   <!-- 👇 Aquí, y SOLO aquí, los scripts específicos de cada vista -->
   {% block scripts %}{% endblock %}
+<script>
+  const switchEl = document.getElementById('themeSwitch');
+  const htmlEl   = document.documentElement;
+
+  // Lee preferencia previa
+  const saved = localStorage.getItem('theme');
+  if (saved === 'light') {
+    htmlEl.setAttribute('data-theme', 'light');
+    switchEl.checked = true;
+  }
+
+  // Escucha cambios
+  switchEl.addEventListener('change', () => {
+    const newTheme = switchEl.checked ? 'light' : 'dark';
+    htmlEl.setAttribute('data-theme', newTheme);
+    localStorage.setItem('theme', newTheme);
+  });
+</script>
 </body>
 </html>

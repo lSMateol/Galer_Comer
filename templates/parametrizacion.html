@@ -15,7 +15,7 @@
           El algoritmo genético optimizará cada una y seleccionará la mejor comuna para la nueva galería.
         </div>
 
-        <!-- FORM: guardará parámetros en sesión al enviar a /parametrizacion -->
+        <!-- FORM: envía a /parametrizacion -->
         <form id="param-form" action="{{ url_for('parametrizacion') }}" method="POST">
           {# Si usas CSRF con Flask-WTF, descomenta:
           {{ form.csrf_token }}
@@ -94,15 +94,15 @@
             </div>
           </div>
 
-          <!-- Acciones: primero guardas parámetros; luego procesas con fetch (btn-procesar) -->
+          <!-- Acciones -->
           <div class="row mt-3 g-2">
             <div class="col-12 col-md-6 d-grid">
-              <button type="submit" class="btn btn-outline-primary btn-lg">
+              <button type="submit" name="action" value="save" class="btn btn-outline-primary btn-lg">
                 Guardar parámetros
               </button>
             </div>
             <div class="col-12 col-md-6 d-grid">
-              <button id="btn-procesar" type="button" class="btn btn-primary btn-lg">
+              <button id="btn-ejecutar" type="submit" name="action" value="run" class="btn btn-primary btn-lg">
                 Ejecutar Algoritmo Genético en Todas las Galerías
               </button>
             </div>
@@ -114,21 +114,20 @@
   </div>
 </div>
 
-<!-- Modal de progreso (siempre presente, oculto; lo muestra JS con abrirModalProgreso) -->
-<div class="modal fade" id="progressModal" tabindex="-1" aria-labelledby="progressModalLabel" aria-hidden="true" style="display: none;">
+<!-- Modal de progreso (siempre presente, oculto) -->
+<div class="modal fade" id="progressModal" tabindex="-1" aria-labelledby="progressModalLabel" aria-hidden="true">
   <div class="modal-dialog modal-lg">
     <div class="modal-content">
       <div class="modal-header bg-primary text-white">
         <h5 class="modal-title" id="progressModalLabel">Procesando 7 Galerías Comerciales</h5>
-        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
       </div>
       <div class="modal-body">
         <div class="progress mb-3" style="height: 25px;">
           <div id="overallProgress" class="progress-bar progress-bar-striped progress-bar-animated"
-               role="progressbar" style="width: 0%">0%</div>
+               role="progressbar" style="width:0%">0%</div>
         </div>
 
-        <h6>Progreso por galería:</h6>
+        <h6 class="mb-2">Progreso por galería</h6>
         <div id="galleryProgress">
           {% for i in range(1, 8) %}
           <div class="mb-2">
@@ -138,17 +137,17 @@
               <span id="progress-text-{{ i }}">Pendiente</span>
             </div>
             <div class="progress" style="height: 15px;">
-              <div id="progress-{{ i }}" class="progress-bar" role="progressbar" style="width: 0%"></div>
+              <div id="progress-{{ i }}" class="progress-bar" role="progressbar" style="width:0%"></div>
             </div>
           </div>
           {% endfor %}
         </div>
 
-        <div id="finalMessage" class="alert alert-info mt-3" style="display: none;">
+        <div id="finalMessage" class="alert alert-info mt-3" style="display:none;">
           <i class="bi bi-check-circle"></i> Procesamiento completado. Redirigiendo a resultados...
         </div>
 
-        <div id="bestComunaInfo" class="alert alert-success mt-3" style="display: none;">
+        <div id="bestComunaInfo" class="alert alert-success mt-3" style="display:none;">
           <i class="bi bi-star-fill"></i> <span id="bestComunaText"></span>
         </div>
       </div>
@@ -156,17 +155,17 @@
   </div>
 </div>
 
-<!-- Datos para JavaScript -->
+<!-- (Opcional) Datos para JS en flujo asíncrono local -->
 <div id="progressData"
      data-thread-id="{{ thread_id|default('') }}"
      data-total-galleries="7"
      data-results-url="{{ url_for('resultados') }}"
-     style="display: none;"></div>
+     style="display:none;"></div>
 
-<!-- Panel de logs (oculto por defecto; lo manejas con tu JS) -->
+<!-- (Opcional) Panel de logs (solo si lo usas en local) -->
 <div id="logsDock"
      class="fixed-bottom bg-dark text-light border-top border-secondary"
-     style="display: none;">
+     style="display:none;">
   <div class="container py-2">
     <div class="d-flex align-items-center mb-2">
       <i class="bi bi-terminal me-2"></i>
@@ -179,10 +178,46 @@
 </div>
 {% endblock %}
 
-{% block extra_js %}
-  {# Tu JS existente (manejo de modales, logs, etc.) #}
-  <script src="{{ url_for('static', filename='js/script.js') }}"></script>
+{% block scripts %}
+  <!-- Si en base.html ya cargas script.js, no lo repitas aquí -->
+  <!-- Modal antes de enviar el POST cuando se pulsa Ejecutar -->
+  <script>
+  document.addEventListener("DOMContentLoaded", function () {
+    var form     = document.getElementById("param-form") || document.getElementById("parametrosForm");
+    var runBtn   = document.getElementById("btn-ejecutar");
+    var modalEl  = document.getElementById("progressModal");
+    var barEl    = document.getElementById("overallProgress");
 
-  {# Nuevo: llama a /procesar_todas_galerias vía fetch y maneja completed/polling #}
-  <script src="{{ url_for('static', filename='js/procesar.js') }}"></script>
+    if (!form || !modalEl) return;
+
+    // Abrir modal SOLO cuando se envía con action=run
+    form.addEventListener("submit", function (ev) {
+      try {
+        var submitter = ev.submitter || document.activeElement; // botón que dispara el submit
+        var isRun = submitter && submitter.name === "action" && submitter.value === "run";
+        if (!isRun) return;
+
+        var modal = new bootstrap.Modal(modalEl, { backdrop: "static", keyboard: false });
+        modal.show();
+
+        // Progreso "estimado" mientras responde el servidor
+        var pct = 0;
+        window.__progressTimer = setInterval(function () {
+          pct = Math.min(pct + (1 + Math.random() * 3), 95);
+          if (barEl) {
+            barEl.style.width = pct + "%";
+            barEl.textContent = Math.floor(pct) + "%";
+          }
+        }, 300);
+
+        // Limpiar al navegar (redirige a /resultados)
+        var stop = function(){ clearInterval(window.__progressTimer); };
+        window.addEventListener("pagehide", stop, { once: true });
+        window.addEventListener("unload",   stop, { once: true });
+      } catch (e) {
+        console.warn("No se pudo abrir el modal de progreso:", e);
+      }
+    });
+  });
+  </script>
 {% endblock %}

@@ -1,40 +1,155 @@
 {% extends "base.html" %}
 
 {% block content %}
-<div class="row">
-    <div class="col-md-8 mx-auto text-center">
-        <h1 class="display-4">Optimización de Galerías Comerciales</h1>
-        <p class="lead">Aplicación de algoritmos genéticos para la delimitación del tamaño y ubicación óptima de galerías comerciales</p>
-        
-        <div class="row mt-5">
-            <div class="col-md-4">
-                <div class="card h-100">
-                    <div class="card-body">
-                        <h5 class="card-title">Parametrización</h5>
-                        <p class="card-text">Configura los parámetros iniciales para la optimización</p>
-                        <a href="{{ url_for('parametrizacion') }}" class="btn btn-primary">Comenzar</a>
-                    </div>
-                </div>
-            </div>
-            <div class="col-md-4">
-                <div class="card h-100">
-                    <div class="card-body">
-                        <h5 class="card-title">Resultados</h5>
-                        <p class="card-text">Visualiza los resultados de las optimizaciones realizadas</p>
-                        <a href="#" class="btn btn-secondary">Ver resultados</a>
-                    </div>
-                </div>
-            </div>
-            <div class="col-md-4">
-                <div class="card h-100">
-                    <div class="card-body">
-                        <h5 class="card-title">Comparativo</h5>
-                        <p class="card-text">Compara diferentes escenarios y configuraciones</p>
-                        <a href="#" class="btn btn-secondary">Comparar</a>
-                    </div>
-                </div>
-            </div>
-        </div>
+<!-- HERO -->
+<section class="py-5">
+  <div class="container px-4">
+    <div class="row align-items-center g-5">
+      <div class="col-lg-6">
+        <h1 class="display-5 fw-bold lh-1 mb-3">Da el primer paso para aprender a usar</h1>
+        <p class="lead">
+          Te invitamos a conocer una herramienta intuitiva que utiliza
+          <strong>algoritmos genéticos</strong> para encontrar las mejores
+          soluciones. Es más fácil de lo que imaginas.
+        </p>
+        <a href="#quick-access" class="btn btn-primary btn-lg">Explorar ahora</a>
+      </div>
+      <div class="col-lg-6">
+        <img src="https://images.unsplash.com/photo-1553877522-43269d4ea984?auto=format&fit=crop&w=800&q=60"
+             class="d-block mx-lg-auto img-fluid rounded-3 shadow" alt="Ilustración algoritmos genéticos">
+      </div>
     </div>
-</div>
+  </div>
+</section>
+
+<!-- CUALIDADES -->
+<section id="cualidades" class="py-5 bg-light">
+  <div class="container">
+    <h2 class="text-center mb-3">Cualidades del aplicativo</h2>
+    <p class="text-center text-muted mb-5">Optimización del tamaño y la ubicación de Galerías Comerciales</p>
+
+    <div class="row g-4">
+      {% set items = [
+        ('Población inicial', 'Conjunto de soluciones aleatorias que sirven como punto de partida evolutivo.', 'bi-diagram-3'),
+        ('Cruce', 'Combina características exitosas de dos soluciones padres para crear nuevas hijas.', 'bi-shuffle'),
+        ('Mutación', 'Introduce variaciones que evitan óptimos locales y exploran nuevas áreas.', 'bi-lightning'),
+        ('Generación', 'Cada ciclo de evaluación, selección, cruce y mutación mejora la calidad de las soluciones.', 'bi-arrow-repeat')
+      ] %}
+      {% for title, desc, icon in items %}
+      <div class="col-md-6 col-lg-3">
+        <div class="card h-100 text-center p-3 shadow-sm">
+          <div class="fs-1 text-primary mb-2"><i class="{{ icon }}"></i></div>
+          <h5 class="card-title">{{ title }}</h5>
+          <p class="card-text small">{{ desc }}</p>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+</section>
+
+<!-- SOBRE EL ALGORITMO -->
+<section class="py-5">
+  <div class="container">
+    <div class="row align-items-center g-5">
+      <div class="col-lg-6">
+        <h2 class="mb-3">Sobre el algoritmo</h2>
+        <p>
+          Los algoritmos genéticos ofrecen una solución revolucionaria para la
+          optimización estratégica de galerías comerciales, aplicando principios de
+          evolución artificial a desafíos operativos clave.
+        </p>
+        <p>
+          Modelamos variables como la distribución de locales, flujos de clientes
+          y ofertas comerciales como “genes” en un cromosoma virtual. El sistema
+          genera miles de combinaciones que evolucionan mediante selección natural
+          computacional.
+        </p>
+      </div>
+      <div class="col-lg-6">
+        <img src="https://images.unsplash.com/photo-1553877522-43269d4ea984?auto=format&fit=crop&w=800&q=60"
+             class="img-fluid rounded-3 shadow" alt="Algoritmo genético">
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- NUESTROS OBJETIVOS -->
+<section class="py-5 bg-light">
+  <div class="container">
+    <h2 class="text-center mb-5">Nuestros objetivos</h2>
+    <div class="row g-4">
+      {% set objs = [
+        ('Liderazgo regional', 'Ser referente comercial líder en las distintas regiones donde operamos.'),
+        ('Decisiones inteligentes', 'Apoyar la toma de decisiones con datos y simulaciones evolutivas.'),
+        ('Soluciones óptimas', 'Alcanzar configuraciones que maximicen rentabilidad y experiencia.')
+      ] %}
+      {% for title, desc in objs %}
+      <div class="col-md-4">
+        <div class="d-flex h-100">
+          <div class="flex-shrink-0 me-3">
+            <div class="bg-primary bg-gradient text-white rounded-3 p-3">
+              <i class="bi bi-bullseye fs-4"></i>
+            </div>
+          </div>
+          <div>
+            <h5>{{ title }}</h5>
+            <p class="mb-0 small text-muted">{{ desc }}</p>
+          </div>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+</section>
+
+<!-- QUICK ACCESS (TUS 3 CARDS ORIGINALES) -->
+<section id="quick-access" class="py-5">
+  <div class="container">
+    <div class="row">
+      <div class="col-md-8 mx-auto text-center">
+        <h2 class="display-4">Optimización de Galerías Comerciales</h2>
+        <p class="lead">Aplicación de algoritmos genéticos para la delimitación del tamaño y ubicación óptima de galerías comerciales</p>
+
+        <div class="row mt-5">
+          <div class="col-md-4">
+            <div class="card h-100">
+              <div class="card-body">
+                <h5 class="card-title">Parametrización</h5>
+                <p class="card-text">Configura los parámetros iniciales para la optimización</p>
+                <a href="{{ url_for('parametrizacion') }}" class="btn btn-primary">Comenzar</a>
+              </div>
+            </div>
+          </div>
+          <div class="col-md-4">
+            <div class="card h-100">
+              <div class="card-body">
+                <h5 class="card-title">Resultados</h5>
+                <p class="card-text">Visualiza los resultados de las optimizaciones realizadas</p>
+                <a href="{{ url_for('historial') }}" class="btn btn-secondary">Ver resultados</a>
+              </div>
+            </div>
+          </div>
+          <div class="col-md-4">
+            <div class="card h-100">
+              <div class="card-body">
+                <h5 class="card-title">Comparativo</h5>
+                <p class="card-text">Compara diferentes escenarios y configuraciones</p>
+                <a href="{{ url_for('comparativo') }}" class="btn btn-secondary">Comparar</a>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- CTA FINAL -->
+<section class="py-5 text-center bg-primary text-white">
+  <div class="container">
+    <h3 class="mb-3">¿Listo para optimizar tu próxima galería?</h3>
+    <a href="{{ url_for('parametrizacion') }}" class="btn btn-light btn-lg">Comenzar ahora</a>
+  </div>
+</section>
 {% endblock %}

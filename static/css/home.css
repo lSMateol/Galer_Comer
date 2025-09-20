@@ -1,0 +1,30 @@
+/* Hero más alto y centrado */
+.hero-section {
+  min-height: 60vh;
+  display: flex;
+  align-items: center;
+}
+
+/* Suavizar bordes de cards */
+.card {
+  border-radius: 1rem;
+}
+
+/* Iconos grandes en cualidades */
+.icon-xl {
+  font-size: 3rem;
+}
+
+/* Sombras suaves */
+.shadow-sm {
+  box-shadow: 0 .5rem 1rem rgba(0,0,0,.05) !important;
+}
+
+/* Botones con gradiente */
+.btn-primary {
+  background: linear-gradient(45deg, #0b57d0, #0053a0);
+  border: none;
+}
+.btn-primary:hover {
+  background: linear-gradient(45deg, #0053a0, #0b57d0);
+}
