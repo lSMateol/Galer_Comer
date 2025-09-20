@@ -1,0 +1,83 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="legal-section py-5">
+  <div class="container px-4">
+    <h1 class="text-center mb-5" data-aos="fade-up">Información Legal</h1>
+
+    <!-- CONTACTO -->
+    <div class="mb-5" data-aos="fade-up">
+      <h2 class="h4 mb-3 accent">Contacto</h2>
+      <div class="card border-0 shadow">
+        <div class="card-body">
+          <div class="row g-3">
+            <div class="col-md-6">
+              <form action="https://formspree.io/f/xqazqyqo" method="POST">
+                <div class="mb-3">
+                  <label class="form-label small fw-bold">Nombre</label>
+                  <input type="text" name="name" class="form-control" required>
+                </div>
+                <div class="mb-3">
+                  <label class="form-label small fw-bold">Correo</label>
+                  <input type="email" name="email" class="form-control" required>
+                </div>
+                <div class="mb-3">
+                  <label class="form-label small fw-bold">Mensaje</label>
+                  <textarea name="message" rows="4" class="form-control" required></textarea>
+                </div>
+                <button type="submit" class="btn btn-primary w-100">Enviar</button>
+              </form>
+            </div>
+            <div class="col-md-6 d-flex flex-column justify-content-center">
+              <ul class="list-unstyled small mb-0">
+                <li class="mb-2"><i class="bi bi-geo-alt me-2 accent"></i>Universidad de Cundinamarca - Fusagasugá</li>
+                <li class="mb-2"><i class="bi bi-envelope me-2 accent"></i>proyecto@galer-comer.edu.co</li>
+                <li><i class="bi bi-clock me-2 accent"></i>Lun - Vie: 8:00-17:00</li>
+              </ul>
+              <iframe
+                src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3971.101349750334!2d-74.09777602476951!3d4.649651843327478!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x8e3f9a3a9c7b1b1b%3A0x1e1f9a3a9c7b1b1b!2sUniversidad%20de%20Cundinamarca!5e0!3m2!1ses!2sco!4v1699999999999"
+                width="100%" height="200" style="border:0;" allowfullscreen loading="lazy"
+                class="rounded mt-3">
+              </iframe>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- TÉRMINOS -->
+    <div class="mb-5" data-aos="fade-up">
+      <h2 class="h4 mb-3 accent">Términos de Servicio</h2>
+      <div class="card border-0 shadow">
+        <div class="card-body small">
+          <p><strong>1. Aceptación</strong><br>Al usar la plataforma aceptas estos términos.</p>
+          <p><strong>2. Uso permitido</strong><br>Académico e investigativo. Sin garantía comercial.</p>
+          <p><strong>3. Propiedad</strong><br>Software bajo licencia MIT / CC BY-NC-SA 4.0.</p>
+          <p><strong>4. Limitación</strong><br>La Universidad no se hace responsable por daños derivados.</p>
+          <p><strong>5. Cambios</strong><br>Se notificarán por correo a usuarios registrados.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- PRIVACIDAD -->
+    <div class="mb-5" data-aos="fade-up">
+      <h2 class="h4 mb-3 accent">Privacidad</h2>
+      <div class="card border-0 shadow">
+        <div class="card-body small">
+          <p><strong>Datos</strong><br> Solo recopilamos parámetros de simulación y mensajes de contacto.</p>
+          <p><strong>Finalidad</strong><br> Mejorar el algoritmo y responder consultas.</p>
+          <p><strong>Cesión</strong><br> No se venden datos. Usamos Formspree para correos.</p>
+          <p><strong>Derechos</strong><br> Acceso, rectificación, supresión: <a href="mailto:proyecto@galer-comer.edu.co" class="accent">proyecto@galer-comer.edu.co</a></p>
+        </div>
+      </div>
+    </div>
+
+    <!-- BOTÓN IMPRIMIR / VOLVER -->
+    <div class="text-center" data-aos="fade-up">
+      <button class="btn btn-outline-secondary btn-sm" onclick="window.print()">
+        <i class="bi bi-printer me-1"></i>Imprimir
+      </button>
+      <a href="{{ url_for('index') }}" class="btn btn-primary btn-sm ms-2">Volver al inicio</a>
+    </div>
+  </div>
+</section>
+{% endblock %}

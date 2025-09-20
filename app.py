@@ -1313,6 +1313,13 @@ def comparativo():
         idx_mun=idx_mun, idx_bc=idx_bc, idx_bs_idx=idx_bs_idx, tabla_rows=tabla_rows
     )
 
+@app.route('/como-usar')
+def como_usar():
+    return render_template('como_usar.html')
+
+@app.route('/legal')
+def legal():
+    return render_template('legal.html')
 if __name__ == '__main__':
     # Inicializar estructuras de datos si no existen
     if 'EXECUTION_LOGS' not in app.config:

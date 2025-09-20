@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="py-5">
+  <div class="container px-4">
+    <h1 class="text-center mb-5">Cómo usar el aplicativo</h1>
+
+    <div class="row g-4">
+      {% set pasos = [
+        (1, 'Paso 1: Parametrización', 'Ingresa los datos de las 6 galerías existentes y de la nueva galería (tamaño del lote, vías primarias/secundarias).', 'bi-sliders'),
+        (2, 'Paso 2: Pesos de optimización', 'Define la importancia de cada objetivo: Beneficio Social, Económico y Margen de Utilidad. La suma debe ser 100 %.', 'bi-percent'),
+        (3, 'Paso 3: Ejecutar', 'Presiona “Ejecutar Algoritmo Genético”. El sistema procesará cada galería y determinará la mejor comuna para la nueva.', 'bi-play-circle'),
+        (4, 'Paso 4: Explorar resultados', 'Revisa ROI, utilidad neta, empleos generados y cromosoma óptimo de cada escenario.', 'bi-bar-chart-line'),
+        (5, 'Paso 5: Comparar', 'Entra al módulo “Comparativo” para visualizar tablas y gráficos lado a lado.', 'bi-columns-gap'),
+        (6, 'Paso 6: Exportar', 'Descarga los resultados en CSV o captura los gráficos para tu informe.', 'bi-download')
+      ] %}
+      {% for num, titulo, desc, icon in pasos %}
+      <div class="col-md-6 col-lg-4">
+        <div class="card h-100 shadow-sm">
+          <div class="card-body text-center">
+            <div class="mb-3">
+              <span class="badge bg-primary fs-5">{{ num }}</span>
+            </div>
+            <div class="fs-1 text-primary mb-2"><i class="{{ icon }}"></i></div>
+            <h5>{{ titulo }}</h5>
+            <p class="small text-muted">{{ desc }}</p>
+          </div>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+
+    <div class="text-center mt-5">
+      <a href="{{ url_for('parametrizacion') }}" class="btn btn-primary btn-lg">Empezar ahora</a>
+    </div>
+  </div>
+</section>
+
+<!-- FAQ rápida -->
+<section class="py-5 bg-light">
+  <div class="container">
+    <h2 class="text-center mb-4">Preguntas frecuentes</h2>
+    <div class="row justify-content-center">
+      <div class="col-lg-8">
+        <div class="accordion" id="faqAccordion">
+          {% set faqs = [
+            ('¿Puedo editar los parámetros después de ejecutar?', 'Sí, solo regresa a “Parametrización”, ajusta los valores y vuelve a correr el algoritmo.'),
+            ('¿Qué significa el cromosoma óptimo?', 'Es la combinación de variables (genes) que obtuvo el mejor fitness según los pesos que definiste.'),
+            ('¿Cuánto tarda la optimización?', 'Entre 30 s y 2 min dependiendo del tamaño de población y generaciones.'),
+            ('¿Es necesario tener conocimientos de programación?', 'No. La interfaz es 100 % gráfica y guiada.')
+          ] %}
+          {% for q, a in faqs %}
+          <div class="accordion-item">
+            <h2 class="accordion-header" id="faq{{ loop.index }}">
+              <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse"
+                      data-bs-target="#collapse{{ loop.index }}">
+                {{ q }}
+              </button>
+            </h2>
+            <div id="collapse{{ loop.index }}" class="accordion-collapse collapse"
+                 data-bs-parent="#faqAccordion">
+              <div class="accordion-body">{{ a }}</div>
+            </div>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+{% endblock %}
