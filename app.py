@@ -15,8 +15,7 @@ import os
 
 load_dotenv()
 
-ENVIRONMENT = os.getenv("ENVIRONMENT", "development")
-SYNC_MODE = os.getenv("SYNC_MODE", "1" if ENVIRONMENT == "production" else "0") == "1"
+ENVIRONMENT = os.environ.get("ENVIRONMENT", "development")
 
 # Secret key
 SECRET_KEY = os.environ.get("FLASK_SECRET_KEY", "dev-insecure-key")
@@ -37,7 +36,7 @@ app = Flask(__name__)
 app.secret_key = SECRET_KEY
 
 # Configuracion de la base de datos - FORMA CORRECTA
-app.config['SQLALCHEMY_DATABASE_URI'] = db_url or "sqlite:///local.db"
+app.config['SQLALCHEMY_DATABASE_URI'] = db_url
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config["ENVIRONMENT"] = ENVIRONMENT
 app.config["LOG_LEVEL"] = os.environ.get("LOG_LEVEL", "INFO")
@@ -168,8 +167,7 @@ def parametrizacion():
         
         # Guardar en sesion
         session['weights'] = (peso_be, peso_bs, peso_mun)
-        if not (ENVIRONMENT == "production" and SYNC_MODE):
-            session['galerias_existentes'] = galerias_existentes
+        session['galerias_existentes'] = galerias_existentes
         session['comuna_nueva_galeria'] = None  # Se determinara despues
         
         # Configurar parametros por defecto si no existen
@@ -191,140 +189,64 @@ def parametrizacion():
         
         run_id = str(uuid.uuid4())
         session['last_run_id'] = run_id
-
-        # ✅ En Vercel (SYNC_MODE=1) ejecuta SIN hilo y redirige a resultados
-        if SYNC_MODE:
-            try:
-                procesar_todas_galerias(
-                    app, thread_id, galerias_existentes,
-                    session['population_size'], session['max_generations'],
-                    session['elite_percentage'], session['mutation_rate'],
-                    session['sigma_factor'], session['crossover_rate'],
-                    (peso_be, peso_bs, peso_mun),
-                    run_id
-                )
-            except Exception as e:
-                app.config['EXECUTION_LOGS'][thread_id].append(f"ERROR: {e}")
-                flash("Ocurrió un error durante el procesamiento.", "danger")
-                return render_template('parametrizacion.html', show_progress_modal=False)
-
-            # Terminado: ir directo a /resultados con el run_id
-            return redirect(url_for('resultados', run_id=run_id))
-
-        # 🧵 Modo local/asíncrono (cuando SYNC_MODE=0): conserva tu hilo + modal
+        # Crear y ejecutar el thread para procesar TODAS las galerias
         thread = threading.Thread(
             target=procesar_todas_galerias,
             args=(app, thread_id, galerias_existentes,
-                  session['population_size'], session['max_generations'],
-                  session['elite_percentage'], session['mutation_rate'],
-                  session['sigma_factor'], session['crossover_rate'],
-                  (peso_be, peso_bs, peso_mun),
-                  run_id)
+                session['population_size'], session['max_generations'],
+                session['elite_percentage'], session['mutation_rate'],
+                session['sigma_factor'], session['crossover_rate'],
+                (peso_be, peso_bs, peso_mun),
+                run_id)
         )
         thread.daemon = True
         thread.start()
-        print(f"Thread {thread_id} iniciado para procesar 7 galerías (run_id={run_id})")
-
-        return render_template('parametrizacion.html',
-                               show_progress_modal=True,
-                               thread_id=thread_id,
-                               run_id=run_id,
-                               galerias_existentes=galerias_existentes)
+        print(f"Thread {thread_id} iniciado para procesar 7 galerias (run_id={run_id})")
+        
+        return render_template('parametrizacion.html', 
+                             show_progress_modal=True,
+                             thread_id=thread_id,
+                             run_id=run_id,
+                             galerias_existentes=galerias_existentes)
     
     return render_template('parametrizacion.html', show_progress_modal=False)
 
 @app.route('/procesar_todas_galerias', methods=['POST'])
 def procesar_todas_galerias_route():
-    # 1) Recuperar datos desde sesión
     galerias_existentes = session.get('galerias_existentes')
     weights = session.get('weights')
     if not galerias_existentes or not weights:
-        return jsonify({
-            "status": "error",
-            "message": "Faltan datos en sesión. Cargue parámetros en /parametrizacion."
-        }), 400
+        return jsonify({"status": "error", "message": "Faltan datos en sesión. Cargue parámetros en /parametrizacion."}), 400
 
-    # 2) Parámetros con tipos seguros (int/float) y valores por defecto
-    try:
-        population_size = int(session.get('population_size', 50))
-        max_generations = int(session.get('max_generations', 1000))
-        elite_percentage = float(session.get('elite_percentage', 0.1))
-        mutation_rate = float(session.get('mutation_rate', 0.05))
-        sigma_factor = float(session.get('sigma_factor', 0.1))
-        crossover_rate = float(session.get('crossover_rate', 0.7))
-    except Exception:
-        return jsonify({
-            "status": "error",
-            "message": "Parámetros inválidos en sesión."
-        }), 400
+    population_size = session.get('population_size', 50)
+    max_generations = session.get('max_generations', 1000)
+    elite_percentage = session.get('elite_percentage', 0.1)
+    mutation_rate = session.get('mutation_rate', 0.05)
+    sigma_factor = session.get('sigma_factor', 0.1)
+    crossover_rate = session.get('crossover_rate', 0.7)
 
-    # 3) Identificadores y logs en memoria
-    thread_id = str(time.time())  # (conserva tu formato para compatibilidad)
+    thread_id = str(time.time())
     session['thread_id'] = thread_id
-    run_id = str(uuid.uuid4())
-
     if 'EXECUTION_LOGS' not in app.config:
         app.config['EXECUTION_LOGS'] = {}
     app.config['EXECUTION_LOGS'][thread_id] = []
 
+    run_id = str(uuid.uuid4())
     session['last_run_id'] = run_id
 
-    # 4) En producción y modo demo, limitar carga para no exceder timeouts serverless
-    if ENVIRONMENT == "production" and SYNC_MODE:
-        population_size = min(population_size, 100)
-        max_generations = min(max_generations, 500)
+    thread = threading.Thread(
+        target=procesar_todas_galerias,
+        args=(app, thread_id, galerias_existentes,
+              population_size, max_generations,
+              elite_percentage, mutation_rate,
+              sigma_factor, crossover_rate, weights,
+              run_id)
+    )
+    thread.daemon = True
+    thread.start()
 
-    # 5) Rama según SYNC_MODE
-    if SYNC_MODE:
-        # --- SÍNCRONO: ejecutar directamente dentro de la petición ---
-        try:
-            procesar_todas_galerias(
-                app, thread_id, galerias_existentes,
-                population_size, max_generations,
-                elite_percentage, mutation_rate,
-                sigma_factor, crossover_rate, weights,
-                run_id
-            )
-        except Exception as e:
-            # Registra el error en logs del thread para trazabilidad
-            app.config['EXECUTION_LOGS'][thread_id].append(f"ERROR: {e}")
-            return jsonify({
-                "status": "error",
-                "message": "Error durante el procesamiento (modo síncrono)."
-            }), 500
+    return jsonify({"status": "ok", "thread_id": thread_id, "run_id": run_id})
 
-        # Terminado: el front puede redirigir a /resultados usando run_id
-        return jsonify({
-            "status": "ok",
-            "thread_id": thread_id,
-            "run_id": run_id,
-            "completed": True
-        })
-    else:
-        # --- ASÍNCRONO: comportamiento actual con thread ---
-        def _target():
-            try:
-                procesar_todas_galerias(
-                    app, thread_id, galerias_existentes,
-                    population_size, max_generations,
-                    elite_percentage, mutation_rate,
-                    sigma_factor, crossover_rate, weights,
-                    run_id
-                )
-            except Exception as e:
-                # Guarda el error en los logs de ejecución
-                app.config['EXECUTION_LOGS'][thread_id].append(f"ERROR: {e}")
-
-        thread = threading.Thread(target=_target, daemon=True)
-        thread.start()
-
-        # Respuesta inmediata; el front puede hacer polling de logs si lo usas
-        return jsonify({
-            "status": "ok",
-            "thread_id": thread_id,
-            "run_id": run_id
-        })
-    
 def calcular_roi_seguro(metrics):
     """
     Calcula el ROI de forma segura, manejando casos donde los valores puedan ser None.
@@ -695,6 +617,7 @@ def ejecucion():
     return render_template('ejecucion.html', thread_id=thread_id)
 
 @app.route('/api/logs/<thread_id>')
+@only_dev
 def get_logs(thread_id):
     logs = app.config['EXECUTION_LOGS'].get(thread_id, [])
     
@@ -1322,5 +1245,13 @@ if __name__ == '__main__':
     if 'RESULTS' not in app.config:
         app.config['RESULTS'] = {}
         print("RESULTS inicializado")
+
+    # Asegurar que la base de datos tenga las tablas necesarias
+    with app.app_context():
+        try:
+            db.create_all()
+            print("Tablas de la base de datos verificadas/creadas")
+        except Exception as e:
+            print(f"Error al crear tablas: {e}")
 
     app.run(debug=True, threaded=True)
