@@ -53,7 +53,7 @@ class Ejecucion(db.Model):
     created_at = db.Column(db.DateTime, server_default=func.now())
 
     __table_args__ = (
-        db.UniqueConstraint('run_id', 'comuna', name='uq_ejec_run_comuna'),
+        db.UniqueConstraint('user_key','run_id', 'comuna', name='uq_ejec_run_comuna'),
     )
 
     # relación 1:N hacia detalles
