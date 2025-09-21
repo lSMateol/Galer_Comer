@@ -1,12 +1,13 @@
-from flask import Flask, render_template, request, jsonify, session, redirect, url_for, flash,current_app, abort
+from flask import Flask, render_template, request, jsonify, session, redirect, url_for, flash,current_app, abort, g
 from datetime import datetime
 from utils.genetic_algorithm import *
 from extensions import db
 from models import *
-from sqlalchemy import text  
+from sqlalchemy import text, func
 from dotenv import load_dotenv
 from functools import wraps
 import uuid
+import traceback
 import numpy as np
 import random
 import threading
@@ -14,6 +15,8 @@ import time
 import os
 
 load_dotenv()
+
+ANON_COOKIE = "user_key"
 
 ENVIRONMENT = os.getenv("ENVIRONMENT", "development")
 SYNC_MODE = os.getenv("SYNC_MODE", "1" if ENVIRONMENT == "production" else "0") == "1"
@@ -53,6 +56,29 @@ def only_dev(f):
             abort(404)
         return f(*args, **kwargs)
     return _w
+
+def get_or_create_user_key(resp=None):
+    uk = request.cookies.get(ANON_COOKIE)
+    if not uk:
+        uk = str(uuid.uuid4())
+        if resp is None:
+            g._set_user_cookie = uk
+        else:
+            resp.set_cookie(ANON_COOKIE, uk, max_age=60*60*24*180,
+                            httponly=True, samesite="Lax", secure=True)
+    return uk
+
+
+@app.after_request
+def _set_user_cookie(resp):
+    uk = getattr(g, "_set_user_cookie", None)
+    if uk:
+        resp.set_cookie(ANON_COOKIE, uk, max_age=60*60*24*180,
+                        httponly=True, samesite="Lax", secure=True)
+    return resp
+
+def _ns(user_key: str, thread_id: str) -> str:
+    return f"{user_key}:{thread_id}"
 
 @app.route('/')
 def index():
@@ -184,10 +210,13 @@ def parametrizacion():
         thread_id = str(time.time())
         session['thread_id'] = thread_id
 
+        uk = get_or_create_user_key()
+        nskey = _ns(uk, thread_id)
+
         # Inicializar logs si no existen
         if 'EXECUTION_LOGS' not in app.config:
             app.config['EXECUTION_LOGS'] = {}
-        app.config['EXECUTION_LOGS'][thread_id] = []
+        app.config['EXECUTION_LOGS'][nskey] = []
         
         run_id = str(uuid.uuid4())
         session['last_run_id'] = run_id
@@ -201,16 +230,15 @@ def parametrizacion():
                     session['elite_percentage'], session['mutation_rate'],
                     session['sigma_factor'], session['crossover_rate'],
                     (peso_be, peso_bs, peso_mun),
-                    run_id
+                    run_id,uk
                 )
             except Exception as e:
-                app.config['EXECUTION_LOGS'][thread_id].append(f"ERROR: {e}")
+                app.config['EXECUTION_LOGS'][nskey].append(f"ERROR: {e}")
                 flash("Ocurrió un error durante el procesamiento.", "danger")
                 return render_template('parametrizacion.html', show_progress_modal=False)
 
             # Terminado: ir directo a /resultados con el run_id
             return redirect(url_for('resultados', run_id=run_id))
-
         # 🧵 Modo local/asíncrono (cuando SYNC_MODE=0): conserva tu hilo + modal
         thread = threading.Thread(
             target=procesar_todas_galerias,
@@ -219,7 +247,7 @@ def parametrizacion():
                   session['elite_percentage'], session['mutation_rate'],
                   session['sigma_factor'], session['crossover_rate'],
                   (peso_be, peso_bs, peso_mun),
-                  run_id)
+                  run_id,uk)
         )
         thread.daemon = True
         thread.start()
@@ -263,11 +291,14 @@ def procesar_todas_galerias_route():
     session['thread_id'] = thread_id
     run_id = str(uuid.uuid4())
 
+    uk = get_or_create_user_key()
+    nskey = _ns(uk, thread_id)
+
     if 'EXECUTION_LOGS' not in app.config:
         app.config['EXECUTION_LOGS'] = {}
-    app.config['EXECUTION_LOGS'][thread_id] = []
-
+    app.config['EXECUTION_LOGS'][nskey] = []
     session['last_run_id'] = run_id
+
 
     # 4) En producción y modo demo, limitar carga para no exceder timeouts serverless
     if ENVIRONMENT == "production" and SYNC_MODE:
@@ -283,11 +314,11 @@ def procesar_todas_galerias_route():
                 population_size, max_generations,
                 elite_percentage, mutation_rate,
                 sigma_factor, crossover_rate, weights,
-                run_id
+                run_id, uk
             )
         except Exception as e:
             # Registra el error en logs del thread para trazabilidad
-            app.config['EXECUTION_LOGS'][thread_id].append(f"ERROR: {e}")
+            app.config['EXECUTION_LOGS'][nskey].append(f"ERROR: {e}")
             return jsonify({
                 "status": "error",
                 "message": "Error durante el procesamiento (modo síncrono)."
@@ -309,11 +340,11 @@ def procesar_todas_galerias_route():
                     population_size, max_generations,
                     elite_percentage, mutation_rate,
                     sigma_factor, crossover_rate, weights,
-                    run_id
+                    run_id, uk
                 )
             except Exception as e:
                 # Guarda el error en los logs de ejecución
-                app.config['EXECUTION_LOGS'][thread_id].append(f"ERROR: {e}")
+                app.config['EXECUTION_LOGS'][nskey].append(f"ERROR: {e}")
 
         thread = threading.Thread(target=_target, daemon=True)
         thread.start()
@@ -356,14 +387,15 @@ def calcular_roi_seguro(metrics):
 def procesar_todas_galerias(app, thread_id, galerias_a_procesar, 
                             population_size, max_generations, elite_percentage,
                             mutation_rate, sigma_factor, crossover_rate, weights,
-                            run_id):
+                            run_id, user_key):
     """
     Nota: requiere que el modelo Ejecucion tenga la columna:
       run_id = db.Column(db.String(36), index=True, nullable=False)
     """
+    nskey = _ns(user_key, thread_id)
 
     with app.app_context():
-        logs = app.config['EXECUTION_LOGS'].get(thread_id, [])
+        logs = app.config['EXECUTION_LOGS'].get(nskey, [])
         
         logs.append("=" * 60)
         logs.append("PROCESANDO LAS 7 GALERiAS COMERCIALES")
@@ -372,7 +404,7 @@ def procesar_todas_galerias(app, thread_id, galerias_a_procesar,
         # Dejar evidencia de que no se borra el historial
         logs.append(f"[{datetime.utcnow().isoformat()}Z] Preservando historial (no se borra la tabla).")
         logs.append(f"[{datetime.utcnow().isoformat()}Z] run_id={run_id} asignado a esta corrida.")
-        app.config['EXECUTION_LOGS'][thread_id] = logs
+        app.config['EXECUTION_LOGS'][nskey] = logs
 
         resultados_galerias = {}
         
@@ -385,12 +417,12 @@ def procesar_todas_galerias(app, thread_id, galerias_a_procesar,
                 existing_execution = Ejecucion.query.filter_by(comuna=galeria_num, run_id=run_id).first()
                 if existing_execution:
                     logs.append(f"GALERIA_{galeria_num} ya existe en este run_id={run_id}. Se omite la inserción duplicada.")
-                    app.config['EXECUTION_LOGS'][thread_id] = logs
+                    app.config['EXECUTION_LOGS'][nskey] = logs
                     continue
                 # -----------------------------------------------------------------
 
                 logs.append(f"Procesando Galeria {galeria_num}...")
-                app.config['EXECUTION_LOGS'][thread_id] = logs
+                app.config['EXECUTION_LOGS'][nskey] = logs
                 time.sleep(0.1)
                 
                 # Calcular constantes para esta galeria
@@ -426,7 +458,8 @@ def procesar_todas_galerias(app, thread_id, galerias_a_procesar,
                     sigma_factor,
                     crossover_rate,
                     weights,
-                    None
+                    None,
+                    user_key
                 )
 
                 # Verificar si el resultado es válido
@@ -447,7 +480,7 @@ def procesar_todas_galerias(app, thread_id, galerias_a_procesar,
                     'user_inputs': user_inputs,
                     'constants': constants
                 }
-                
+
                 # Guardar en BD solo las primeras 6 galerías
                 if galeria_num <= 6:
                     try:
@@ -475,11 +508,10 @@ def procesar_todas_galerias(app, thread_id, galerias_a_procesar,
                             margen_utilidad=best_metrics.get('u_MarUtN', 0.0),
                             empleos_directos=best_metrics.get('x_Empleo', 0.0),
                             beneficio_social=best_metrics.get('u_BenSoc', 0.0),
-
                             cromosoma_optimo=best_chromosome,
 
-                            # 👇 NUEVO
-                            run_id=run_id
+                            run_id=run_id,
+                            user_key = user_key  
                         )
                         db.session.add(nueva_ejecucion)
                         db.session.commit()
@@ -522,7 +554,7 @@ def procesar_todas_galerias(app, thread_id, galerias_a_procesar,
                         db.session.rollback()
                         logs.append(f"Error al guardar Galeria {galeria_num}: {str(db_e)}")
                 
-                app.config['EXECUTION_LOGS'][thread_id] = logs
+                app.config['EXECUTION_LOGS'][nskey] = logs
             
             # Después de procesar las 6 galerías, encontrar la mejor
             mejores_roi = []
@@ -543,7 +575,7 @@ def procesar_todas_galerias(app, thread_id, galerias_a_procesar,
                     g7_cfg = next((g for g in galerias_a_procesar if g['numero'] == 7), None)
                     if g7_cfg is None:
                         logs.append("No se encontró configuración para la Galería 7.")
-                        app.config['EXECUTION_LOGS'][thread_id] = logs
+                        app.config['EXECUTION_LOGS'][nskey] = logs
                         return
                     galeria_7 = {
                         'user_inputs': {
@@ -563,7 +595,7 @@ def procesar_todas_galerias(app, thread_id, galerias_a_procesar,
                     galeria_7['best_metrics']['comuna'] = mejor_comuna
 
                 logs.append(f"Optimizando Galeria 7 para la Comuna {mejor_comuna}...")
-                app.config['EXECUTION_LOGS'][thread_id] = logs
+                app.config['EXECUTION_LOGS'][nskey] = logs
 
                 result_final_7 = run_genetic_algorithm(
                     app,
@@ -577,7 +609,8 @@ def procesar_todas_galerias(app, thread_id, galerias_a_procesar,
                     sigma_factor,
                     crossover_rate,
                     weights,
-                    None
+                    None,
+                    user_key
                 )
 
                 if result_final_7 is None:
@@ -587,7 +620,6 @@ def procesar_todas_galerias(app, thread_id, galerias_a_procesar,
                     best_fitness_7 = 0.0
                 else:
                     best_chromosome_7, best_metrics_7, best_fitness_7 = result_final_7
-
                 # GUARDAR EN BD LA GALERÍA 7
                 try:
                     ejec_7 = Ejecucion(
@@ -617,6 +649,7 @@ def procesar_todas_galerias(app, thread_id, galerias_a_procesar,
 
                         cromosoma_optimo=best_chromosome_7,
 
+                        user_key = user_key,
                         run_id=run_id
                     )
                     db.session.add(ejec_7)
@@ -654,7 +687,7 @@ def procesar_todas_galerias(app, thread_id, galerias_a_procesar,
                         db.session.commit()
                     except Exception as det_e:
                         db.session.rollback()
-                        logs.append(f"[WARN] No se pudo guardar detalle de la Galería {galeria_num}: {det_e}")
+                        logs.append(f"[WARN] No se pudo guardar detalle de la Galería 7: {det_e}")
 
                     logs.append(f"GALERIA_7_GUARDADA (comuna óptima {mejor_comuna}) ROI:{best_metrics_7.get('u_ROIGal', 0):.2f} (run_id={run_id})")
                 except Exception as e:
@@ -665,7 +698,7 @@ def procesar_todas_galerias(app, thread_id, galerias_a_procesar,
                 if 'RESULTS' not in app.config:
                     app.config['RESULTS'] = {}
                 
-                app.config['RESULTS'][thread_id] = {
+                app.config['RESULTS'][nskey] = {
                     'best_chromosome': galeria_7.get('best_chromosome'),
                     'best_metrics': galeria_7.get('best_metrics'),
                     'best_fitness': galeria_7.get('best_fitness'),
@@ -675,25 +708,24 @@ def procesar_todas_galerias(app, thread_id, galerias_a_procesar,
                 }
                 
                 logs.append("PROCESAMIENTO COMPLETADO")
-                app.config['EXECUTION_LOGS'][thread_id] = logs
+                app.config['EXECUTION_LOGS'][nskey] = logs
 
         except Exception as e:
             error_msg = f"Error en el procesamiento: {str(e)}"
             logs.append(error_msg)
-            import traceback
             traceback_str = traceback.format_exc()
             logs.append(traceback_str)
             
             if 'RESULTS' not in app.config:
                 app.config['RESULTS'] = {}
                 
-            app.config['RESULTS'][thread_id] = {
+            app.config['RESULTS'][nskey] = {
                 'error': error_msg,
                 'traceback': traceback_str,
                 'run_id': run_id
             }
             
-            app.config['EXECUTION_LOGS'][thread_id] = logs
+            app.config['EXECUTION_LOGS'][nskey] = logs
 
 @app.route('/ejecucion')
 def ejecucion():
@@ -702,10 +734,12 @@ def ejecucion():
 
 @app.route('/api/logs/<thread_id>')
 def get_logs(thread_id):
-    logs = app.config['EXECUTION_LOGS'].get(thread_id, [])
+    uk = get_or_create_user_key()
+    nskey = _ns(uk, thread_id)
+    logs = app.config.get('EXECUTION_LOGS', {}).get(nskey, [])
     
     # Verificar si hay resultados disponibles
-    has_results = 'RESULTS' in app.config and thread_id in app.config['RESULTS']
+    has_results = 'RESULTS' in app.config and nskey in app.config['RESULTS']
     
     # Determinar el estado
     status = "ejecutando"
@@ -745,9 +779,11 @@ def resultados():
         "weights": session.get('weights')  # (BE, BS, MUN)
     }
 
+    uk = get_or_create_user_key()
+
     # 1) Leer resultados persistidos (BD) por run_id
     ejecuciones = (Ejecucion.query
-                   .filter_by(run_id=run_id)
+                   .filter_by(run_id=run_id, user_key=uk)
                    .order_by(Ejecucion.comuna.asc())
                    .all())
 
@@ -758,7 +794,9 @@ def resultados():
     # 3) Progreso en vivo (logs) mientras corre
     logs = []
     if thread_id and 'EXECUTION_LOGS' in app.config:
-        logs = app.config['EXECUTION_LOGS'].get(thread_id, [])
+        uk = get_or_create_user_key()
+        nskey = _ns(uk, thread_id)
+        logs = app.config['EXECUTION_LOGS'].get(nskey, [])
 
     # 4) KPIs de la mejor solución (desde BD, mejor ROI del run_id)
     resumen_worker = None
@@ -801,14 +839,15 @@ def resultados():
 def run_genetic_algorithm(app, thread_id, user_inputs, constants, 
                          population_size, max_generations, elite_percentage,
                          mutation_rate, sigma_factor, crossover_rate, weights,
-                         galerias_existentes):
+                         galerias_existentes, user_key):
     with app.app_context():
+        nskey = _ns(user_key, thread_id)
 
         # Asegurate de que el array de logs existe
-        if thread_id not in app.config['EXECUTION_LOGS']:
-            app.config['EXECUTION_LOGS'][thread_id] = []
+        if nskey not in app.config['EXECUTION_LOGS']:
+            app.config['EXECUTION_LOGS'][nskey] = []
 
-        logs = app.config['EXECUTION_LOGS'][thread_id]
+        logs = app.config['EXECUTION_LOGS'][nskey]
 
         # LOG INICIAL CRíTICO
         logs.append("=" * 60)
@@ -825,7 +864,7 @@ def run_genetic_algorithm(app, thread_id, user_inputs, constants,
         if galerias_existentes is not None:
             for i, galeria in enumerate(galerias_existentes):
                 logs.append(f"Galeria Comuna {galeria['comuna']} procesada - ROI: {galeria.get('roi', 0):.2f}%")
-                app.config['EXECUTION_LOGS'][thread_id] = logs
+                app.config['EXECUTION_LOGS'][nskey] = logs
                 time.sleep(0.5)
             
             if galerias_existentes and len(galerias_existentes) > 0:
@@ -839,11 +878,10 @@ def run_genetic_algorithm(app, thread_id, user_inputs, constants,
 
         logs.append("=" * 60)
 
-        logs.append("ROI de galerias existentes:")
         if galerias_existentes is not None:
             for i, galeria in enumerate(galerias_existentes):
                 logs.append(f"Galeria Comuna {galeria['comuna']} procesada - ROI: {galeria.get('roi', 0):.2f}%")
-                app.config['EXECUTION_LOGS'][thread_id] = logs
+                app.config['EXECUTION_LOGS'][nskey] = logs
                 time.sleep(0.5)
             
             if galerias_existentes and len(galerias_existentes) > 0:
@@ -858,7 +896,7 @@ def run_genetic_algorithm(app, thread_id, user_inputs, constants,
         logs.append("=" * 60)
         
         # ACTUALIZA INMEDIATAMENTE LOS LOGS
-        app.config['EXECUTION_LOGS'][thread_id] = logs
+        app.config['EXECUTION_LOGS'][nskey] = logs
         print(f"Logs iniciales configurados para thread {thread_id}")
 
         try:
@@ -867,7 +905,7 @@ def run_genetic_algorithm(app, thread_id, user_inputs, constants,
             full_constants = {**GLOBAL_CONSTANTS, **constants}
 
             logs.append("Constantes combinadas correctamente")
-            app.config['EXECUTION_LOGS'][thread_id] = logs
+            app.config['EXECUTION_LOGS'][nskey] = logs
 
              # Asegurarse de que todas las constantes necesarias esten presentes
             required_constants = ['z_TaOfAd', 'z_TaBoAd', 'z_TaCaAd', 'z_TaBaCo']
@@ -884,14 +922,14 @@ def run_genetic_algorithm(app, thread_id, user_inputs, constants,
                     elif const == 'z_TaBaCo':
                         full_constants[const] = 68
 
-            app.config['EXECUTION_LOGS'][thread_id] = logs
+            app.config['EXECUTION_LOGS'][nskey] = logs
             print(f" Constantes combinadas para thread {thread_id}")
             
             # Inicializar poblacion
             population = create_initial_population(population_size, gene_definitions, user_inputs, full_constants)
             
             logs.append(f"Poblacion inicial creada con {len(population)} individuos")
-            app.config['EXECUTION_LOGS'][thread_id] = logs
+            app.config['EXECUTION_LOGS'][nskey] = logs
 
             logs.append("Poblacion inicial generada:")
             for i, chromosome in enumerate(population[:3]):
@@ -1048,7 +1086,7 @@ def run_genetic_algorithm(app, thread_id, user_inputs, constants,
                 if 'RESULTS' not in app.config:
                     app.config['RESULTS'] = {}
                 
-                app.config['RESULTS'][thread_id] = {
+                app.config['RESULTS'][nskey] = {
                     'best_chromosome': best_chromosome,
                     'best_metrics': best_metrics,
                     'best_fitness': best_fitness
@@ -1079,7 +1117,7 @@ def run_genetic_algorithm(app, thread_id, user_inputs, constants,
                 if 'RESULTS' not in app.config:
                     app.config['RESULTS'] = {}
 
-                app.config['RESULTS'][thread_id] = {
+                app.config['RESULTS'][nskey] = {
                     'best_chromosome': best_chromosome,
                     'best_metrics': best_metrics,
                     'best_fitness': best_fitness
@@ -1089,17 +1127,16 @@ def run_genetic_algorithm(app, thread_id, user_inputs, constants,
             else:
                 logs.append("No se encontro una solucion optima.")
             
-            app.config['EXECUTION_LOGS'][thread_id] = logs
+            app.config['EXECUTION_LOGS'][nskey] = logs
 
         except Exception as e:
             error_msg = f"Error en el algoritmo genético: {str(e)}"
             print(error_msg)
             logs.append(error_msg)
-            import traceback
             traceback_str = traceback.format_exc()
             print(traceback_str)
             logs.append(traceback_str)
-            app.config['EXECUTION_LOGS'][thread_id] = logs
+            app.config['EXECUTION_LOGS'][nskey] = logs
             
             # Retornar valores por defecto en caso de error
             return best_chromosome, best_metrics, best_fitness
@@ -1107,21 +1144,75 @@ def run_genetic_algorithm(app, thread_id, user_inputs, constants,
         # Retornar los resultados al final de la función
         return best_chromosome, best_metrics, best_fitness
 
-@app.route('/historial')
+@app.route("/historial")
 def historial():
+    """
+    Lista las corridas del usuario actual (anónimo) agrupadas por run_id.
+    Muestra: fecha última, si está completa (7/7), y el mejor ROI de esa corrida.
+    Permite filtrar por run_id (?q=) y paginar (?page=, ?per_page=).
+    """
+    uk = get_or_create_user_key()  # ← identifica al “usuario” por cookie
+
+    # Filtros opcionales
+    term = (request.args.get("q") or "").strip()
+    page = int(request.args.get("page", 1) or 1)
+    per_page = int(request.args.get("per_page", 10) or 10)
+
+    # Agregado por corrida (run_id) SOLO del user_key actual
+    base = (
+        db.session.query(
+            Ejecucion.run_id.label("run_id"),
+            func.count(Ejecucion.id).label("filas"),
+            func.max(Ejecucion.fecha_ejecucion).label("ultima_fecha"),
+            func.max(Ejecucion.roi).label("mejor_roi"),
+        )
+        .filter(Ejecucion.user_key == uk)                     # ← filtro clave
+        .group_by(Ejecucion.run_id)
+        .order_by(func.max(Ejecucion.fecha_ejecucion).desc())
+    )
+
+    if term:
+        base = base.filter(Ejecucion.run_id.ilike(f"%{term}%"))
+
+    # Paginar (si usas Flask-SQLAlchemy ≥3, usa .paginate sobre db.session.execute/Select)
     try:
-        ejecuciones = (Ejecucion.query
-                      .order_by(Ejecucion.created_at.desc())
-                      .limit(200)
-                      .all())
-        return render_template('historial.html', ejecuciones=ejecuciones or [])
-    except Exception as e:
-        return render_template('historial.html', error=f"Error al consultar el historial: {e}")
+        pag = base.paginate(page=page, per_page=per_page, error_out=False)
+        rows = pag.items
+        total = pag.total
+        pages = pag.pages
+    except Exception:
+        # Fallback sin paginate si tu versión no lo soporta en queries agregadas
+        rows = base.all()
+        total = len(rows)
+        pages = 1
+
+    # Empaquetar para el template
+    corridas = []
+    for r in rows:
+        corridas.append({
+            "run_id": r.run_id,
+            "filas": r.filas,
+            "completa": (r.filas or 0) >= 7,
+            "ultima_fecha": r.ultima_fecha,
+            "mejor_roi": r.mejor_roi or 0,
+        })
+
+    return render_template(
+        "historial.html",
+        corridas=corridas,
+        q=term,
+        page=page,
+        per_page=per_page,
+        total=total,
+        pages=pages,
+    )
 
 @app.route('/api/check_completion/<thread_id>')
 @only_dev
 def check_completion(thread_id):
-    if 'RESULTS' in app.config and thread_id in app.config['RESULTS']:
+    uk = get_or_create_user_key()
+    nskey = _ns(uk, thread_id)
+    if 'RESULTS' in app.config and nskey in app.config['RESULTS']:
         return jsonify({"completed": True})
     return jsonify({"completed": False})
 
@@ -1168,8 +1259,11 @@ def detalle_ejecucion(ejecucion_id):
 @app.route("/comparativo")
 def comparativo():
     run_id = request.args.get("run_id")
+    uk = get_or_create_user_key()
 
-    q = Ejecucion.query.order_by(Ejecucion.comuna.asc(), Ejecucion.fecha_ejecucion.desc())
+    q = (Ejecucion.query
+        .filter(Ejecucion.user_key == uk)  
+        .order_by(Ejecucion.comuna.asc(), Ejecucion.fecha_ejecucion.desc()))
     if run_id:
         q = q.filter(Ejecucion.run_id == run_id)
 
@@ -1259,61 +1353,61 @@ def comparativo():
         idx_bs_idx.append( z(e.beneficio_social) )
         idx_fitness.append( z(e.mejor_fitness) )
 
-        def pick(seq, i):
-            try:
-                v = seq[i]
-                return 0 if v is None else v
-            except Exception:
-                return 0
+    def pick(seq, i):
+        try:
+            v = seq[i]
+            return 0 if v is None else v
+        except Exception:
+            return 0
 
-        tabla_rows = []
-        for i, label in enumerate(labels):
-            fila = {
-                "label": label,
+    tabla_rows = []
+    for i, label in enumerate(labels):
+        fila = {
+            "label": label,
 
-                # Económico - inversión
-                "inv_total":   pick(be_inv_total, i),
-                "inv_loc":     pick(be_inv_loc, i),
-                "inv_parq":    pick(be_inv_parq, i),
-                "inv_zonas":   pick(be_inv_zonas, i),
+            # Económico - inversión
+            "inv_total":   pick(be_inv_total, i),
+            "inv_loc":     pick(be_inv_loc, i),
+            "inv_parq":    pick(be_inv_parq, i),
+            "inv_zonas":   pick(be_inv_zonas, i),
 
-                # Ingresos/Egresos totales
-                "ing_total":   pick(be_ing_total, i),
-                "egr_total":   pick(be_egr_total, i),
+            # Ingresos/Egresos totales
+            "ing_total":   pick(be_ing_total, i),
+            "egr_total":   pick(be_egr_total, i),
 
-                # Ingresos detalle
-                "ing_arr":     pick(be_ing_arr, i),
-                "ing_adm":     pick(be_ing_adm, i),
-                "ing_parq":    pick(be_ing_parq, i),
+            # Ingresos detalle
+            "ing_arr":     pick(be_ing_arr, i),
+            "ing_adm":     pick(be_ing_adm, i),
+            "ing_parq":    pick(be_ing_parq, i),
 
-                # Egresos detalle
-                "egr_mant":    pick(be_egr_mant, i),
-                "egr_serv":    pick(be_egr_serv, i),
-                "egr_sal":     pick(be_egr_sal, i),
-                "egr_ope":     pick(be_egr_ope, i),
-                "egr_adm":     pick(be_egr_adm, i),
-                "egr_leg":     pick(be_egr_leg, i),
-                "egr_imp":     pick(be_egr_imp, i),
+            # Egresos detalle
+            "egr_mant":    pick(be_egr_mant, i),
+            "egr_serv":    pick(be_egr_serv, i),
+            "egr_sal":     pick(be_egr_sal, i),
+            "egr_ope":     pick(be_egr_ope, i),
+            "egr_adm":     pick(be_egr_adm, i),
+            "egr_leg":     pick(be_egr_leg, i),
+            "egr_imp":     pick(be_egr_imp, i),
 
-                # Beneficio social
-                "bs_acces":    pick(bs_acces, i),
-                "bs_emp_dir":  pick(bs_emp_dir, i),
-                "bs_emp_ind":  pick(bs_emp_ind, i),
-                "bs_calidad":  pick(bs_calidad, i),
+            # Beneficio social
+            "bs_acces":    pick(bs_acces, i),
+            "bs_emp_dir":  pick(bs_emp_dir, i),
+            "bs_emp_ind":  pick(bs_emp_ind, i),
+            "bs_calidad":  pick(bs_calidad, i),
 
-                # Áreas comerciales
-                "ar_af":       pick(ar_af, i),
-                "ar_cp":       pick(ar_cp, i),
-                "ar_nal":      pick(ar_nal, i),
-                "ar_sc":       pick(ar_sc, i),
+            # Áreas comerciales
+            "ar_af":       pick(ar_af, i),
+            "ar_cp":       pick(ar_cp, i),
+            "ar_nal":      pick(ar_nal, i),
+            "ar_sc":       pick(ar_sc, i),
 
-                # Índices
-                "idx_mun":     pick(idx_mun, i),
-                "idx_bc":      pick(idx_bc, i),
-                "idx_bs_idx":  pick(idx_bs_idx, i),
-                "idx_fitness": pick(idx_fitness, i),
-            }
-            tabla_rows.append(fila)
+            # Índices
+            "idx_mun":     pick(idx_mun, i),
+            "idx_bc":      pick(idx_bc, i),
+            "idx_bs_idx":  pick(idx_bs_idx, i),
+            "idx_fitness": pick(idx_fitness, i),
+        }
+        tabla_rows.append(fila)
 
     return render_template(
         "comparativo.html",

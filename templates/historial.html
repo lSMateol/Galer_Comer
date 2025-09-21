@@ -6,44 +6,76 @@
     <div class="alert alert-danger">Error<br>{{ error }}</div>
   {% endif %}
 
-  {% if ejecuciones and ejecuciones|length > 0 %}
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <h4 class="mb-0">Historial de corridas</h4>
+    <form class="d-flex" method="get" action="{{ url_for('historial') }}">
+      <input class="form-control form-control-sm me-2" type="search" name="q" placeholder="Buscar run_id…" value="{{ q or '' }}">
+      <button class="btn btn-sm btn-outline-secondary" type="submit">Buscar</button>
+    </form>
+  </div>
+
+  {% if corridas and corridas|length > 0 %}
     <div class="card">
-      <div class="card-header"><h5>Historial de Ejecuciones</h5></div>
+      <div class="card-header"><h5 class="mb-0">Listado</h5></div>
       <div class="card-body table-responsive">
         <table class="table table-sm align-middle">
-          <thead>
+          <thead class="table-light">
             <tr>
               <th>#</th>
               <th>run_id</th>
-              <th>Comuna</th>
-              <th>ROI %</th>
-              <th>Utilidad</th>
-              <th>Acciones</th>
+              <th class="text-end">Filas</th>
+              <th class="text-center">Estado</th>
+              <th class="text-end">Mejor ROI</th>
+              <th>Última ejecución</th>
+              <th class="text-end">Acciones</th>
             </tr>
           </thead>
           <tbody>
-          {% for e in ejecuciones %}
+          {% for c in corridas %}
             <tr>
               <td>{{ loop.index }}</td>
-              <td class="text-truncate" style="max-width:240px">{{ e.run_id or '—' }}</td>
-              <td>{{ e.comuna }}</td>
-              <td>{{ "%.2f"|format(e.roi or 0) }}</td>
-              <td>$ {{ "{:,.2f}".format(e.utilidad_neta_usd or 0) }}</td>
-              <td>
-                <a href="{{ url_for('detalle_ejecucion', ejecucion_id=e.id) }}"
-                   class="btn btn-sm btn-outline-primary">Detalle</a>
+              <td class="font-monospace text-truncate" style="max-width: 280px">{{ c.run_id }}</td>
+              <td class="text-end">{{ c.filas or 0 }}</td>
+              <td class="text-center">
+                {% if c.completa %}
+                  <span class="badge bg-success">Completa</span>
+                {% else %}
+                  <span class="badge bg-warning text-dark">En curso</span>
+                {% endif %}
+              </td>
+              <td class="text-end">{{ '{:,.4f}'.format(c.mejor_roi or 0) }}</td>
+              <td>{{ c.ultima_fecha or '—' }}</td>
+              <td class="text-end">
+                <a href="{{ url_for('resultados', run_id=c.run_id) }}"
+                   class="btn btn-sm btn-primary">Ver resultados</a>
+                <a href="{{ url_for('comparativo', run_id=c.run_id) }}"
+                   class="btn btn-sm btn-outline-secondary">Comparativo</a>
               </td>
             </tr>
           {% endfor %}
           </tbody>
         </table>
       </div>
+
+      {% if pages and pages > 1 %}
+      <div class="card-footer">
+        <nav aria-label="Paginación">
+          <ul class="pagination pagination-sm justify-content-end mb-0">
+            {% for p in range(1, pages + 1) %}
+            <li class="page-item {% if p == page %}active{% endif %}">
+              <a class="page-link" href="{{ url_for('historial', q=q, page=p, per_page=per_page) }}">{{ p }}</a>
+            </li>
+            {% endfor %}
+          </ul>
+        </nav>
+      </div>
+      {% endif %}
     </div>
   {% else %}
     <div class="alert alert-info">
-      No hay ejecuciones guardadas. Realice una ejecución para generar historial.
+      No hay corridas en tu historial. Ejecuta una simulación para generar resultados.
     </div>
-    <a href="{{ url_for('parametrizacion') }}" class="btn btn-primary">Nueva Ejecución</a>
+    <a href="{{ url_for('parametrizacion') }}" class="btn btn-primary">Nueva ejecución</a>
   {% endif %}
 
 </div></div>

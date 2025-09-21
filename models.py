@@ -9,6 +9,9 @@ class Ejecucion(db.Model):
     run_id = db.Column(db.String(64), index=True, nullable=False)
     # NUEVO: Identificador de comuna (1-6 para existentes, 7 para nueva)
     comuna = db.Column(db.Integer, nullable=False)
+    # models.py
+    user_key = db.Column(db.String(64), index=True, nullable=False, default="")
+
     
     # ------------------
     #  Inputs
