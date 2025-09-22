@@ -64,6 +64,7 @@ body::before {
   transition: background 0.4s ease;
 }
 
+/* Efecto hover */
 .py-5.text-center.bg-primary.text-white:hover {
   background: linear-gradient(135deg, #37719e, #005a9e) !important;
   transform: translateY(-2px);
@@ -75,6 +76,7 @@ body::before {
   color: #ffffff !important;
 }
 
+/* Estilos para inputs y selects */
 .form-control:focus,
 .form-select:focus {
   background: #ffffff !important;
@@ -87,4 +89,57 @@ body::before {
 .form-control:focus::placeholder,
 .form-select:focus::placeholder {
   color: #555 !important;
+}
+/* Fondo blanco al escribir (focus) – ambos temas */
+.form-control:focus,
+.form-select:focus {
+  background: #ffffff !important;
+  color: #000000 !important;
+  border-color: #0078d4 !important;
+  box-shadow: 0 0 0 .2rem rgba(0, 120, 212, .25) !important;
+}
+
+/* Tablas rayadas – modo oscuro */
+html[data-theme="dark"] .table-striped > tbody > tr:nth-of-type(odd) > * {
+  --bs-table-color-type: #ffffff;           /* texto del tema */
+  --bs-table-bg-type: var(--bs-table-striped-bg); /* fondo sútil */
+}
+
+/* Tablas rayadas – modo claro */
+html[data-theme="light"] .table-striped > tbody > tr:nth-of-type(odd) > * {
+  --bs-table-color-type: var(--text-dark);
+  --bs-table-bg-type: rgba(0, 0, 0, 0.02);
+}
+
+html[data-theme="dark"] .table-hover > tbody > tr:hover > * {
+  background-color: rgba(0, 229, 255, 0.08);
+}
+
+/* Botones primarios – oscuro */
+html[data-theme="dark"] .btn-primary {
+  background: linear-gradient(135deg, #005a9e, #003d6b) !important;
+  border: none;
+  transition: background 0.3s ease;
+}
+
+html[data-theme="dark"] .btn-primary:hover {
+  background: linear-gradient(135deg, #0078d4, #005a9e) !important;
+}
+
+/* Cards – oscuro */
+html[data-theme="dark"] .card {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+/* Scroll oscuro – suave */
+::-webkit-scrollbar-thumb {
+  background: var(--primary);
+  border-radius: 4px;
+}
+
+/* Sin patrón en móvil */
+@media (max-width: 768px) {
+  body::before {
+    display: none;
+  }
 }
