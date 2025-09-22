@@ -99,10 +99,16 @@ body::before {
   box-shadow: 0 0 0 .2rem rgba(0, 120, 212, .25) !important;
 }
 
-/* Tabla rayada – modo oscuro */
+/* Tablas rayadas – modo oscuro */
 html[data-theme="dark"] .table-striped > tbody > tr:nth-of-type(odd) > * {
-  background-color: #ffffff;
-  color: var(--text); /* usa tu variable --text */
+  --bs-table-color-type: var(--text);           /* texto del tema */
+  --bs-table-bg-type: rgba(255, 255, 255, 0.04); /* fondo sútil */
+}
+
+/* Tablas rayadas – modo claro */
+html[data-theme="light"] .table-striped > tbody > tr:nth-of-type(odd) > * {
+  --bs-table-color-type: var(--text-dark);
+  --bs-table-bg-type: rgba(0, 0, 0, 0.02);
 }
 
 html[data-theme="dark"] .table-hover > tbody > tr:hover > * {
