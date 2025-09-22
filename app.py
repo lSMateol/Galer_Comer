@@ -84,6 +84,65 @@ def _ns(user_key: str, thread_id: str) -> str:
 def index():
     return render_template('index.html')
 
+def guardar_resumen_run(run_id: str, user_key: str):
+    # Agregados básicos de las 7 filas del run
+    agg = (db.session.query(
+            func.count(Ejecucion.id),
+            func.sum(Ejecucion.inv_inicial_usd),
+            func.sum(Ejecucion.utilidad_neta_usd),
+            func.avg(Ejecucion.roi),
+            func.avg(Ejecucion.margen_utilidad),
+            func.avg(Ejecucion.mejor_fitness),
+            func.avg(Ejecucion.beneficio_social),
+        )
+        .filter(Ejecucion.run_id == run_id, Ejecucion.user_key == user_key)
+        .one()
+    )
+
+    filas, sum_inv, sum_ut, avg_roi, avg_margen, avg_fit, avg_ben = agg
+
+    # Mejor comuna base (1..6) por ROI
+    best_base = (Ejecucion.query
+                 .filter(Ejecucion.user_key == user_key,
+                         Ejecucion.run_id == run_id,
+                         Ejecucion.comuna <= 6)
+                 .order_by(Ejecucion.roi.desc())
+                 .first())
+
+    mejor_comuna_base = best_base.comuna if best_base else None
+    mejor_roi_base    = best_base.roi if best_base else None
+
+    # UPSERT (create or update)
+    resumen = (ResumenRun.query
+               .filter_by(user_key=user_key, run_id=run_id)
+               .first())
+    if not resumen:
+        resumen = ResumenRun(
+            user_key=user_key,
+            run_id=run_id,
+            total_inversion = float(sum_inv or 0),
+            total_utilidad  = float(sum_ut  or 0),
+            prom_roi        = float(avg_roi or 0),
+            prom_margen     = float(avg_margen or 0),
+            prom_fitness    = float(avg_fit or 0),
+            prom_ben_social = float(avg_ben or 0),
+            mejor_comuna_base = mejor_comuna_base,
+            mejor_roi_base    = float(mejor_roi_base or 0),
+        )
+        db.session.add(resumen)
+    else:
+        resumen.total_inversion = float(sum_inv or 0)
+        resumen.total_utilidad  = float(sum_ut  or 0)
+        resumen.prom_roi        = float(avg_roi or 0)
+        resumen.prom_margen     = float(avg_margen or 0)
+        resumen.prom_fitness    = float(avg_fit or 0)
+        resumen.prom_ben_social = float(avg_ben or 0)
+        resumen.mejor_comuna_base = mejor_comuna_base
+        resumen.mejor_roi_base    = float(mejor_roi_base or 0)
+
+    db.session.commit()
+    return resumen
+
 @app.route('/api/debug/database')
 @only_dev
 def debug_database():
@@ -708,6 +767,13 @@ def procesar_todas_galerias(app, thread_id, galerias_a_procesar,
                 }
                 
                 logs.append("PROCESAMIENTO COMPLETADO")
+
+                try:
+                    guardar_resumen_run(run_id, user_key)
+                    logs.append(f"[OK] Resumen guardado para run_id={run_id}")
+                except Exception as e:
+                    db.session.rollback()
+                    logs.append(f"[WARN] No se pudo guardar el resumen del run: {e}")
                 app.config['EXECUTION_LOGS'][nskey] = logs
 
         except Exception as e:
@@ -822,6 +888,12 @@ def resultados():
             mejor_comuna = best.comuna
             mejor_roi = best.roi
 
+    if completa:
+        try:
+            guardar_resumen_run(run_id, uk)
+        except Exception as e:
+            current_app.logger.warning(f"No se pudo guardar resumen_run: {e}")
+    resumen_run = ResumenRun.query.filter_by(user_key=uk, run_id=run_id).first()
     # 6) Render al template
     return render_template(
         'resultados.html',
@@ -832,7 +904,8 @@ def resultados():
         logs=logs,                 # progreso del modal
         resumen_worker=resumen_worker,  # ahora viene de la BD
         mejor_comuna=mejor_comuna,
-        mejor_roi=mejor_roi
+        mejor_roi=mejor_roi,
+        resumen_run=resumen_run
     )
 
 
@@ -1424,6 +1497,37 @@ def comparativo():
         ar_af=ar_af, ar_cp=ar_cp, ar_nal=ar_nal, ar_sc=ar_sc,
         idx_mun=idx_mun, idx_bc=idx_bc, idx_bs_idx=idx_bs_idx, idx_fitness=idx_fitness,tabla_rows=tabla_rows
     )
+
+@app.route("/resumen-corrida")
+def resumen_corrida():
+    uk = get_or_create_user_key()
+
+    # (Opcional) backfill rápido por si hay corridas sin resumen
+    try:
+        run_ids = [r[0] for r in db.session.query(Ejecucion.run_id)
+                   .filter(Ejecucion.user_key == uk).distinct().all()]
+        for rid in run_ids:
+            if not ResumenRun.query.filter_by(user_key=uk, run_id=rid).first():
+                guardar_resumen_run(rid, uk)  # ya definida en app.py
+    except Exception:
+        db.session.rollback()
+
+    # Filtros
+    only_run = (request.args.get("run_id") or "").strip()
+    limit = int(request.args.get("limit", 50) or 50)
+
+    q = (ResumenRun.query
+         .filter(ResumenRun.user_key == uk))
+
+    if only_run:
+        q = q.filter(ResumenRun.run_id == only_run)
+
+    filas = (q.order_by(ResumenRun.prom_fitness.desc(),
+                        ResumenRun.created_at.desc())
+               .limit(limit)
+               .all())
+
+    return render_template("resumen_corrida.html", filas=filas)
 
 @app.route('/como-usar')
 def como_usar():
