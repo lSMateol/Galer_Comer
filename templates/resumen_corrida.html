@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="container mt-4">
+  <h3>Resumen de corridas (mejor prom-fitness)</h3>
+  <p class="text-muted">Ordenado por <code>prom_fitness</code> desc. Puedes filtrar con <code>?run_id=...</code> y limitar con <code>?limit=...</code>.</p>
+
+  <table class="table table-striped align-middle">
+    <thead>
+      <tr>
+        <th>Run ID</th>
+        <th>Prom. Fitness</th>
+        <th>Prom. ROI</th>
+        <th>Prom. Margen</th>
+        <th>Prom. Beneficio Social</th>
+        <th>Total Inversión</th>
+        <th>Total Utilidad</th>
+        <th>Mejor Comuna Base</th>
+        <th>Mejor ROI Base</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for r in filas %}
+      <tr>
+        <td class="font-monospace">{{ r.run_id }}</td>
+        <td>{{ "%.4f"|format(r.prom_fitness or 0) }}</td>
+        <td>{{ "%.2f"|format(r.prom_roi or 0) }}%</td>
+        <td>{{ "%.2f"|format(r.prom_margen or 0) }}%</td>
+        <td>{{ "%.4f"|format(r.prom_ben_social or 0) }}</td>
+        <td>${{ "{:,.2f}".format(r.total_inversion or 0) }}</td>
+        <td>${{ "{:,.2f}".format(r.total_utilidad or 0) }}</td>
+        <td>{{ r.mejor_comuna_base or "-" }}</td>
+        <td>{{ "%.2f"|format(r.mejor_roi_base or 0) }}%</td>
+        <td>
+          <a class="btn btn-sm btn-outline-primary"
+             href="{{ url_for('resultados', run_id=r.run_id) }}">Ver detalles</a>
+        </td>
+      </tr>
+    {% else %}
+      <tr><td colspan="10" class="text-muted">No hay corridas resumidas aún.</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

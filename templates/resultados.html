@@ -73,12 +73,12 @@
               <thead>
                 <tr>
                   <th>Galería</th>
-                  <th>ROI %</th>
-                  <th>Utilidad Neta</th>
-                  <th>Inversión Inicial</th>
-                  <th>Margen</th>
-                  <th>Fitness</th>
-                  <th>Beneficio Social</th>
+                  <th class="text-end">ROI %</th>
+                  <th class="text-end">Utilidad Neta</th>
+                  <th class="text-end">Inversión Inicial</th>
+                  <th class="text-end">Margen</th>
+                  <th class="text-end">Fitness</th>
+                  <th class="text-end">Beneficio Social</th>
                   <th>Acciones</th>
                 </tr>
               </thead>
@@ -88,12 +88,12 @@
                   <td>
                     {% if e.comuna == 7 %} 7 (Nueva) {% else %} {{ e.comuna }} {% endif %}
                   </td>
-                  <td>{{ "%.2f"|format(e.roi or 0) }}</td>
-                  <td>$ {{ "{:,.2f}".format(e.utilidad_neta_usd or 0) }}</td>
-                  <td>$ {{ "{:,.2f}".format(e.inv_inicial_usd or 0) }}</td>
-                  <td>{{ "{:.2%}".format(e.margen_utilidad or 0) }}</td>
-                  <td>{{ "{:.4f}".format(e.mejor_fitness) or 0 }}</td>
-                  <td>{{ "{:.4f}".format(e.beneficio_social or 0) }}</td>
+                  <td class="text-end">{{ "%.2f"|format(e.roi or 0) }}</td>
+                  <td class="text-end">$ {{ "{:,.2f}".format(e.utilidad_neta_usd or 0) }}</td>
+                  <td class="text-end">$ {{ "{:,.2f}".format(e.inv_inicial_usd or 0) }}</td>
+                  <td class="text-end">{{ "{:.2%}".format(e.margen_utilidad or 0) }}</td>
+                  <td class="text-end">{{ "{:.4f}".format(e.mejor_fitness) or 0 }}</td>
+                  <td class="text-end">{{ "{:.4f}".format(e.beneficio_social or 0) }}</td>
                   <td class="d-flex gap-2">
                     <a href="{{ url_for('detalle_ejecucion', ejecucion_id=e.id) }}" 
                       class="btn btn-sm btn-outline-primary">Detalle</a>
@@ -105,6 +105,49 @@
             <p class="text-muted mb-0"><small>Nota: la fila resaltada corresponde a la galería 7 (nueva) optimizada en la mejor comuna.</small></p>
           </div>
         </div>
+
+        {# ─────────── NUEVO: CANTIDAD DE LOCALES POR TIPO ─────────── #}
+        {% if locales_rows and totales_locales %}
+        <div class="card mb-4">
+          <div class="card-header bg-secondary text-white">
+            <h5>Locales por tipo (12 / 16 / 20 / 25)</h5>
+          </div>
+          <div class="card-body table-responsive">
+            <table class="table table-sm align-middle">
+              <thead>
+                <tr>
+                  <th>Galería</th>
+                  <th class="text-end">Locales 12 m²</th>
+                  <th class="text-end">Locales 16 m²</th>
+                  <th class="text-end">Locales 20 m²</th>
+                  <th class="text-end">Locales 25 m²</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for r in locales_rows %}
+                <tr class="{% if r.comuna == 7 %}table-primary{% endif %}">
+                  <td>{% if r.comuna == 7 %}7 (Nueva){% else %}{{ r.comuna }}{% endif %}</td>
+                  <td class="text-end">{{ r.l12 }}</td>
+                  <td class="text-end">{{ r.l16 }}</td>
+                  <td class="text-end">{{ r.l20 }}</td>
+                  <td class="text-end">{{ r.l25 }}</td>
+                </tr>
+                {% endfor %}
+              </tbody>
+              <tfoot>
+                <tr class="table-dark">
+                  <th class="text-end">Totales</th>
+                  <th class="text-end">{{ totales_locales.l12 }}</th>
+                  <th class="text-end">{{ totales_locales.l16 }}</th>
+                  <th class="text-end">{{ totales_locales.l20 }}</th>
+                  <th class="text-end">{{ totales_locales.l25 }}</th>
+                </tr>
+              </tfoot>
+            </table>
+            <p class="text-muted mb-0"><small>La fila resaltada corresponde a la Galería 7 (nueva).</small></p>
+          </div>
+        </div>
+        {% endif %}
 
         {# Bloque “compatibilidad” por si quieres seguir mostrando los KPIs agregados de la 7 del worker #}
         {% if resumen_worker %}
@@ -162,7 +205,7 @@
         </div>
 
         {# (AQUÍ deja intactos tus bloques de Inversión, Ingresos, Egresos, MUN, Resumen Final, Cromosoma Óptimo, etc.) #}
-        {{ super() }} {# si prefieres, pega tus secciones tal como las tenías #}
+        {{ super() }}
 
         <div class="d-grid gap-2 d-md-flex justify-content-md-end">
           <button class="btn btn-primary me-md-2" type="button">Exportar a PDF</button>

@@ -9,6 +9,9 @@ class Ejecucion(db.Model):
     run_id = db.Column(db.String(64), index=True, nullable=False)
     # NUEVO: Identificador de comuna (1-6 para existentes, 7 para nueva)
     comuna = db.Column(db.Integer, nullable=False)
+    # models.py
+    user_key = db.Column(db.String(64), index=True, nullable=False, default="")
+
     
     # ------------------
     #  Inputs
@@ -45,12 +48,19 @@ class Ejecucion(db.Model):
     #  Detalles de Solución
     # ------------------
     cromosoma_optimo = db.Column(JSONB, nullable=False)
-    
     fecha_ejecucion = db.Column(db.DateTime, server_default=func.now())
     created_at = db.Column(db.DateTime, server_default=func.now())
 
+    # ------------------
+    #  Cantidad de Locales
+    # ------------------
+    locales_12 = db.Column(db.Integer, nullable=True)
+    locales_16 = db.Column(db.Integer, nullable=True)
+    locales_20 = db.Column(db.Integer, nullable=True)
+    locales_25 = db.Column(db.Integer, nullable=True)
+
     __table_args__ = (
-        db.UniqueConstraint('run_id', 'comuna', name='uq_ejec_run_comuna'),
+        db.UniqueConstraint('user_key','run_id', 'comuna', name='uq_ejec_run_comuna'),
     )
 
     # relación 1:N hacia detalles
@@ -59,6 +69,31 @@ class Ejecucion(db.Model):
         back_populates='ejecucion',
         cascade='all, delete-orphan',
         lazy='selectin'
+    )
+
+class ResumenRun(db.Model):
+    __tablename__ = 'resumen_runs'
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_key = db.Column(db.String(64), index=True, nullable=False)
+    run_id   = db.Column(db.String(64), index=True, nullable=False)
+
+    # agregados
+    total_inversion   = db.Column(db.Float, nullable=False, default=0.0)
+    total_utilidad    = db.Column(db.Float, nullable=False, default=0.0)
+
+    prom_roi          = db.Column(db.Float, nullable=False, default=0.0)
+    prom_margen       = db.Column(db.Float, nullable=False, default=0.0)
+    prom_fitness      = db.Column(db.Float, nullable=False, default=0.0)
+    prom_ben_social   = db.Column(db.Float, nullable=False, default=0.0)
+
+    # extras útiles para la portada
+    mejor_comuna_base = db.Column(db.Integer, nullable=True)   # mejor entre 1..6
+    mejor_roi_base    = db.Column(db.Float, nullable=True)
+    created_at        = db.Column(db.DateTime, server_default=func.now())
+
+    __table_args__ = (
+        db.UniqueConstraint('user_key', 'run_id', name='uq_resumen_user_run'),
     )
 
 
