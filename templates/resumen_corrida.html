@@ -1,45 +1,88 @@
 {% extends "base.html" %}
 {% block content %}
 <div class="container mt-4">
-  <h3>Resumen de corridas (mejor prom-fitness)</h3>
-  <p class="text-muted">Ordenado por <code>prom_fitness</code> desc. Puedes filtrar con <code>?run_id=...</code> y limitar con <code>?limit=...</code>.</p>
+  <div class="d-flex align-items-center justify-content-between">
+    <div>
+      <h3 class="mb-0">Resumen de corridas (mejor prom-fitness)</h3>
+      <p class="text-muted mb-0">
+        Ordenado por <code>prom_fitness</code> desc. Puedes filtrar con <code>?run_id=...</code> y limitar con <code>?limit=...</code>.
+      </p>
+    </div>
+    <div>
+      <a
+        class="btn btn-outline-success"
+        href="{{ url_for('resumen_corrida_csv', run_id=only_run, limit=limit) }}"
+      >
+        Descargar CSV
+      </a>
+    </div>
+  </div>
 
-  <table class="table table-striped align-middle">
-    <thead>
-      <tr>
-        <th>Run ID</th>
-        <th>Prom. Fitness</th>
-        <th>Prom. ROI</th>
-        <th>Prom. Margen</th>
-        <th>Prom. Beneficio Social</th>
-        <th>Total Inversión</th>
-        <th>Total Utilidad</th>
-        <th>Mejor Comuna Base</th>
-        <th>Mejor ROI Base</th>
-        <th></th>
-      </tr>
-    </thead>
-    <tbody>
-    {% for r in filas %}
-      <tr>
-        <td class="font-monospace">{{ r.run_id }}</td>
-        <td>{{ "%.4f"|format(r.prom_fitness or 0) }}</td>
-        <td>{{ "%.2f"|format(r.prom_roi or 0) }}%</td>
-        <td>{{ "%.2f"|format(r.prom_margen or 0) }}%</td>
-        <td>{{ "%.4f"|format(r.prom_ben_social or 0) }}</td>
-        <td>${{ "{:,.2f}".format(r.total_inversion or 0) }}</td>
-        <td>${{ "{:,.2f}".format(r.total_utilidad or 0) }}</td>
-        <td>{{ r.mejor_comuna_base or "-" }}</td>
-        <td>{{ "%.2f"|format(r.mejor_roi_base or 0) }}%</td>
-        <td>
-          <a class="btn btn-sm btn-outline-primary"
-             href="{{ url_for('resultados', run_id=r.run_id) }}">Ver detalles</a>
-        </td>
-      </tr>
-    {% else %}
-      <tr><td colspan="10" class="text-muted">No hay corridas resumidas aún.</td></tr>
-    {% endfor %}
-    </tbody>
-  </table>
+  <div class="table-responsive mt-3">
+    <table class="table table-striped align-middle">
+      <thead>
+        <tr>
+          <th>Run ID</th>
+          <th>Prom. Fitness</th>
+          <th>Prom. ROI</th>
+          <th>Prom. Margen</th>
+          <th>Prom. Beneficio Social</th>
+          <th>Total Inversión</th>
+          <th>Total Utilidad</th>
+          <th>Mejor Comuna Base</th>
+          <th>Mejor ROI Base</th>
+          <th>Locales 12</th>
+          <th>Locales 16</th>
+          <th>Locales 20</th>
+          <th>Locales 25</th>
+          <th>Ár. Alim. Frescos</th>
+          <th>Ár. Comidas Prep.</th>
+          <th>Ár. No Aliment.</th>
+          <th>Ár. Complement.</th>
+          <th>Ingresos Totales</th>
+          <th>Egresos Totales</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+      {% if rows_with_aggs and rows_with_aggs|length > 0 %}
+        {% for item in rows_with_aggs %}
+          {% set r = item.resumen %}
+          <tr>
+            <td class="font-monospace">{{ r.run_id }}</td>
+            <td>{{ "%.4f"|format(r.prom_fitness or 0) }}</td>
+            <td>{{ "%.2f"|format(r.prom_roi or 0) }}%</td>
+            <td>{{ "%.2f"|format(r.prom_margen or 0) }}%</td>
+            <td>{{ "%.4f"|format(r.prom_ben_social or 0) }}</td>
+            <td>${{ "{:,.2f}".format(r.total_inversion or 0) }}</td>
+            <td>${{ "{:,.2f}".format(r.total_utilidad or 0) }}</td>
+            <td>{{ r.mejor_comuna_base or "-" }}</td>
+            <td>{{ "%.2f"|format(r.mejor_roi_base or 0) }}%</td>
+
+            <td>{{ item.sum_l12 }}</td>
+            <td>{{ item.sum_l16 }}</td>
+            <td>{{ item.sum_l20 }}</td>
+            <td>{{ item.sum_l25 }}</td>
+
+            <td>{{ item.sum_ar_af }}</td>
+            <td>{{ item.sum_ar_cp }}</td>
+            <td>{{ item.sum_ar_nal }}</td>
+            <td>{{ item.sum_ar_sc }}</td>
+
+            <td>${{ "{:,.2f}".format(item.sum_ing_total or 0) }}</td>
+            <td>${{ "{:,.2f}".format(item.sum_egr_total or 0) }}</td>
+
+            <td>
+              <a class="btn btn-sm btn-outline-primary"
+                 href="{{ url_for('resultados', run_id=r.run_id) }}">Ver detalles</a>
+            </td>
+          </tr>
+        {% endfor %}
+      {% else %}
+        <tr><td colspan="20" class="text-muted">No hay corridas resumidas aún.</td></tr>
+      {% endif %}
+      </tbody>
+    </table>
+  </div>
 </div>
 {% endblock %}
