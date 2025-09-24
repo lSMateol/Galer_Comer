@@ -1536,24 +1536,14 @@ def comparativo():
 
 @app.route("/resumen-corrida")
 def resumen_corrida():
-    uk = get_or_create_user_key()
-
-    # (Opcional) backfill por si hay corridas sin resumen
-    try:
-        run_ids = [r[0] for r in db.session.query(Ejecucion.run_id)
-                   .filter(Ejecucion.user_key == uk).distinct().all()]
-        for rid in run_ids:
-            if not ResumenRun.query.filter_by(user_key=uk, run_id=rid).first():
-                guardar_resumen_run(rid, uk)
-    except Exception:
-        db.session.rollback()
+    # 🔥 GLOBAL: no usamos user_key (sin backfill aquí para mantenerlo simple)
 
     # Filtros
     only_run = (request.args.get("run_id") or "").strip()
     limit = int(request.args.get("limit", 50) or 50)
 
-    q = (ResumenRun.query
-         .filter(ResumenRun.user_key == uk))
+    # ResumenRun global
+    q = ResumenRun.query
     if only_run:
         q = q.filter(ResumenRun.run_id == only_run)
 
@@ -1562,7 +1552,7 @@ def resumen_corrida():
                .limit(limit)
                .all())
 
-    # Agregados por run_id (locales, áreas, ingresos/egresos)
+    # Agregados por run_id (locales, áreas, ingresos/egresos) – GLOBAL
     aggs = (
         db.session.query(
             Ejecucion.run_id.label("run_id"),
@@ -1578,7 +1568,7 @@ def resumen_corrida():
             func.coalesce(func.sum(EjecucionDetalle.egr_total), 0.0).label("sum_egr_total"),
         )
         .outerjoin(EjecucionDetalle, EjecucionDetalle.ejecucion_id == Ejecucion.id)
-        .filter(Ejecucion.user_key == uk)
+        # 🔥 sin filtro por Ejecucion.user_key
         .group_by(Ejecucion.run_id)
         .all()
     )
@@ -1612,14 +1602,11 @@ def resumen_corrida():
 
 @app.route("/resumen-corrida.csv")
 def resumen_corrida_csv():
-    """Exporta el mismo resumen como CSV respetando los filtros."""
-    uk = get_or_create_user_key()
-
+    """Exporta el mismo resumen como CSV (GLOBAL) respetando los filtros."""
     only_run = (request.args.get("run_id") or "").strip()
     limit = int(request.args.get("limit", 50) or 50)
 
-    q = (ResumenRun.query
-         .filter(ResumenRun.user_key == uk))
+    q = ResumenRun.query
     if only_run:
         q = q.filter(ResumenRun.run_id == only_run)
 
@@ -1643,7 +1630,6 @@ def resumen_corrida_csv():
             func.coalesce(func.sum(EjecucionDetalle.egr_total), 0.0).label("sum_egr_total"),
         )
         .outerjoin(EjecucionDetalle, EjecucionDetalle.ejecucion_id == Ejecucion.id)
-        .filter(Ejecucion.user_key == uk)
         .group_by(Ejecucion.run_id)
         .all()
     )
@@ -1699,9 +1685,7 @@ def resumen_corrida_csv():
     return Response(
         csv_bytes,
         mimetype="text/csv; charset=utf-8",
-        headers={
-            "Content-Disposition": 'attachment; filename="resumen_corrida.csv"'
-        },
+        headers={"Content-Disposition": 'attachment; filename="resumen_corrida.csv"'},
     )
 
 @app.route('/como-usar')
