@@ -1,9 +1,9 @@
-from flask import Flask, render_template, request, jsonify, session, redirect, url_for, flash,current_app, abort, g
+from flask import Flask, render_template, request, jsonify, session, redirect, url_for, flash,current_app, abort, g, Response
 from datetime import datetime
 from utils.genetic_algorithm import *
 from extensions import db
 from models import *
-from sqlalchemy import text, func
+from sqlalchemy import text, func, cast, Integer
 from dotenv import load_dotenv
 from functools import wraps
 import uuid
@@ -13,6 +13,8 @@ import random
 import threading
 import time
 import os
+import io
+import csv
 
 load_dotenv()
 
@@ -1536,13 +1538,13 @@ def comparativo():
 def resumen_corrida():
     uk = get_or_create_user_key()
 
-    # (Opcional) backfill rápido por si hay corridas sin resumen
+    # (Opcional) backfill por si hay corridas sin resumen
     try:
         run_ids = [r[0] for r in db.session.query(Ejecucion.run_id)
                    .filter(Ejecucion.user_key == uk).distinct().all()]
         for rid in run_ids:
             if not ResumenRun.query.filter_by(user_key=uk, run_id=rid).first():
-                guardar_resumen_run(rid, uk)  # ya definida en app.py
+                guardar_resumen_run(rid, uk)
     except Exception:
         db.session.rollback()
 
@@ -1552,7 +1554,6 @@ def resumen_corrida():
 
     q = (ResumenRun.query
          .filter(ResumenRun.user_key == uk))
-
     if only_run:
         q = q.filter(ResumenRun.run_id == only_run)
 
@@ -1561,7 +1562,147 @@ def resumen_corrida():
                .limit(limit)
                .all())
 
-    return render_template("resumen_corrida.html", filas=filas)
+    # Agregados por run_id (locales, áreas, ingresos/egresos)
+    aggs = (
+        db.session.query(
+            Ejecucion.run_id.label("run_id"),
+            func.coalesce(func.sum(cast(Ejecucion.locales_12, Integer)), 0).label("sum_l12"),
+            func.coalesce(func.sum(cast(Ejecucion.locales_16, Integer)), 0).label("sum_l16"),
+            func.coalesce(func.sum(cast(Ejecucion.locales_20, Integer)), 0).label("sum_l20"),
+            func.coalesce(func.sum(cast(Ejecucion.locales_25, Integer)), 0).label("sum_l25"),
+            func.coalesce(func.sum(cast(EjecucionDetalle.ar_alimentos_frescos, Integer)), 0).label("sum_ar_af"),
+            func.coalesce(func.sum(cast(EjecucionDetalle.ar_comidas_preparadas, Integer)), 0).label("sum_ar_cp"),
+            func.coalesce(func.sum(cast(EjecucionDetalle.ar_no_alimentarios, Integer)), 0).label("sum_ar_nal"),
+            func.coalesce(func.sum(cast(EjecucionDetalle.ar_complementarios, Integer)), 0).label("sum_ar_sc"),
+            func.coalesce(func.sum(EjecucionDetalle.ing_total), 0.0).label("sum_ing_total"),
+            func.coalesce(func.sum(EjecucionDetalle.egr_total), 0.0).label("sum_egr_total"),
+        )
+        .outerjoin(EjecucionDetalle, EjecucionDetalle.ejecucion_id == Ejecucion.id)
+        .filter(Ejecucion.user_key == uk)
+        .group_by(Ejecucion.run_id)
+        .all()
+    )
+
+    aggs_map = {
+        a.run_id: {
+            "sum_l12": a.sum_l12, "sum_l16": a.sum_l16, "sum_l20": a.sum_l20, "sum_l25": a.sum_l25,
+            "sum_ar_af": a.sum_ar_af, "sum_ar_cp": a.sum_ar_cp, "sum_ar_nal": a.sum_ar_nal, "sum_ar_sc": a.sum_ar_sc,
+            "sum_ing_total": float(a.sum_ing_total or 0.0),
+            "sum_egr_total": float(a.sum_egr_total or 0.0),
+        }
+        for a in aggs
+    }
+
+    rows_with_aggs = []
+    for r in filas:
+        sums = aggs_map.get(r.run_id, {
+            "sum_l12": 0, "sum_l16": 0, "sum_l20": 0, "sum_l25": 0,
+            "sum_ar_af": 0, "sum_ar_cp": 0, "sum_ar_nal": 0, "sum_ar_sc": 0,
+            "sum_ing_total": 0.0, "sum_egr_total": 0.0,
+        })
+        rows_with_aggs.append({"resumen": r, **sums})
+
+    return render_template(
+        "resumen_corrida.html",
+        rows_with_aggs=rows_with_aggs,
+        only_run=only_run,
+        limit=limit,
+    )
+
+
+@app.route("/resumen-corrida.csv")
+def resumen_corrida_csv():
+    """Exporta el mismo resumen como CSV respetando los filtros."""
+    uk = get_or_create_user_key()
+
+    only_run = (request.args.get("run_id") or "").strip()
+    limit = int(request.args.get("limit", 50) or 50)
+
+    q = (ResumenRun.query
+         .filter(ResumenRun.user_key == uk))
+    if only_run:
+        q = q.filter(ResumenRun.run_id == only_run)
+
+    filas = (q.order_by(ResumenRun.prom_fitness.desc(),
+                        ResumenRun.created_at.desc())
+               .limit(limit)
+               .all())
+
+    aggs = (
+        db.session.query(
+            Ejecucion.run_id.label("run_id"),
+            func.coalesce(func.sum(cast(Ejecucion.locales_12, Integer)), 0).label("sum_l12"),
+            func.coalesce(func.sum(cast(Ejecucion.locales_16, Integer)), 0).label("sum_l16"),
+            func.coalesce(func.sum(cast(Ejecucion.locales_20, Integer)), 0).label("sum_l20"),
+            func.coalesce(func.sum(cast(Ejecucion.locales_25, Integer)), 0).label("sum_l25"),
+            func.coalesce(func.sum(cast(EjecucionDetalle.ar_alimentos_frescos, Integer)), 0).label("sum_ar_af"),
+            func.coalesce(func.sum(cast(EjecucionDetalle.ar_comidas_preparadas, Integer)), 0).label("sum_ar_cp"),
+            func.coalesce(func.sum(cast(EjecucionDetalle.ar_no_alimentarios, Integer)), 0).label("sum_ar_nal"),
+            func.coalesce(func.sum(cast(EjecucionDetalle.ar_complementarios, Integer)), 0).label("sum_ar_sc"),
+            func.coalesce(func.sum(EjecucionDetalle.ing_total), 0.0).label("sum_ing_total"),
+            func.coalesce(func.sum(EjecucionDetalle.egr_total), 0.0).label("sum_egr_total"),
+        )
+        .outerjoin(EjecucionDetalle, EjecucionDetalle.ejecucion_id == Ejecucion.id)
+        .filter(Ejecucion.user_key == uk)
+        .group_by(Ejecucion.run_id)
+        .all()
+    )
+
+    aggs_map = {
+        a.run_id: {
+            "sum_l12": a.sum_l12, "sum_l16": a.sum_l16, "sum_l20": a.sum_l20, "sum_l25": a.sum_l25,
+            "sum_ar_af": a.sum_ar_af, "sum_ar_cp": a.sum_ar_cp, "sum_ar_nal": a.sum_ar_nal, "sum_ar_sc": a.sum_ar_sc,
+            "sum_ing_total": float(a.sum_ing_total or 0.0),
+            "sum_egr_total": float(a.sum_egr_total or 0.0),
+        }
+        for a in aggs
+    }
+
+    # Generar CSV
+    output = io.StringIO(newline="")
+    writer = csv.writer(output)
+
+    writer.writerow([
+        "run_id",
+        "prom_fitness", "prom_roi", "prom_margen", "prom_ben_social",
+        "total_inversion", "total_utilidad",
+        "mejor_comuna_base", "mejor_roi_base",
+        "locales_12", "locales_16", "locales_20", "locales_25",
+        "ar_alimentos_frescos", "ar_comidas_preparadas", "ar_no_alimentarios", "ar_complementarios",
+        "ing_total", "egr_total",
+    ])
+
+    for r in filas:
+        sums = aggs_map.get(r.run_id, {
+            "sum_l12": 0, "sum_l16": 0, "sum_l20": 0, "sum_l25": 0,
+            "sum_ar_af": 0, "sum_ar_cp": 0, "sum_ar_nal": 0, "sum_ar_sc": 0,
+            "sum_ing_total": 0.0, "sum_egr_total": 0.0,
+        })
+        writer.writerow([
+            r.run_id,
+            (r.prom_fitness or 0),
+            (r.prom_roi or 0),
+            (r.prom_margen or 0),
+            (r.prom_ben_social or 0),
+            (r.total_inversion or 0),
+            (r.total_utilidad or 0),
+            (r.mejor_comuna_base if r.mejor_comuna_base is not None else ""),
+            (r.mejor_roi_base or 0),
+            sums["sum_l12"], sums["sum_l16"], sums["sum_l20"], sums["sum_l25"],
+            sums["sum_ar_af"], sums["sum_ar_cp"], sums["sum_ar_nal"], sums["sum_ar_sc"],
+            sums["sum_ing_total"], sums["sum_egr_total"],
+        ])
+
+    csv_bytes = output.getvalue().encode("utf-8-sig")  # BOM para Excel
+    output.close()
+
+    return Response(
+        csv_bytes,
+        mimetype="text/csv; charset=utf-8",
+        headers={
+            "Content-Disposition": 'attachment; filename="resumen_corrida.csv"'
+        },
+    )
 
 @app.route('/como-usar')
 def como_usar():
