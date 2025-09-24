@@ -51,6 +51,14 @@ class Ejecucion(db.Model):
     fecha_ejecucion = db.Column(db.DateTime, server_default=func.now())
     created_at = db.Column(db.DateTime, server_default=func.now())
 
+    # ------------------
+    #  Cantidad de Locales
+    # ------------------
+    locales_12 = db.Column(db.Integer, nullable=True)
+    locales_16 = db.Column(db.Integer, nullable=True)
+    locales_20 = db.Column(db.Integer, nullable=True)
+    locales_25 = db.Column(db.Integer, nullable=True)
+
     __table_args__ = (
         db.UniqueConstraint('user_key','run_id', 'comuna', name='uq_ejec_run_comuna'),
     )

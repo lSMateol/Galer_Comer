@@ -569,6 +569,11 @@ def procesar_todas_galerias(app, thread_id, galerias_a_procesar,
                             beneficio_social=best_metrics.get('u_BenSoc', 0.0),
                             cromosoma_optimo=best_chromosome,
 
+                            locales_12 = int(best_metrics.get('l_CLTi12', 0) or 0),
+                            locales_16 = int(best_metrics.get('l_CLTi16', 0) or 0),
+                            locales_20 = int(best_metrics.get('l_CLTi20', 0) or 0),
+                            locales_25 = int(best_metrics.get('l_CLTi25', 0) or 0),
+
                             run_id=run_id,
                             user_key = user_key  
                         )
@@ -705,8 +710,12 @@ def procesar_todas_galerias(app, thread_id, galerias_a_procesar,
                         margen_utilidad=best_metrics_7.get('u_MarUtN', 0.0),
                         empleos_directos=best_metrics_7.get('x_Empleo', 0.0),
                         beneficio_social=best_metrics_7.get('u_BenSoc', 0.0),
-
                         cromosoma_optimo=best_chromosome_7,
+                        
+                        locales_12 = int(best_metrics_7.get('l_CLTi12', 0) or 0),
+                        locales_16 = int(best_metrics_7.get('l_CLTi16', 0) or 0),
+                        locales_20 = int(best_metrics_7.get('l_CLTi20', 0) or 0),
+                        locales_25 = int(best_metrics_7.get('l_CLTi25', 0) or 0),
 
                         user_key = user_key,
                         run_id=run_id
@@ -888,6 +897,30 @@ def resultados():
             mejor_comuna = best.comuna
             mejor_roi = best.roi
 
+    # === Agregado: tabla de locales por tipo y totales ===
+    def _zint(x):
+        try:
+            return 0 if x is None else int(x)
+        except Exception:
+            return 0
+
+    locales_rows = []
+    totales_locales = {"l12": 0, "l16": 0, "l20": 0, "l25": 0}
+
+    for e in ejecuciones:
+        fila = {
+            "comuna": e.comuna,
+            "l12": _zint(getattr(e, "locales_12", 0)),
+            "l16": _zint(getattr(e, "locales_16", 0)),
+            "l20": _zint(getattr(e, "locales_20", 0)),
+            "l25": _zint(getattr(e, "locales_25", 0)),
+        }
+        locales_rows.append(fila)
+        totales_locales["l12"] += fila["l12"]
+        totales_locales["l16"] += fila["l16"]
+        totales_locales["l20"] += fila["l20"]
+        totales_locales["l25"] += fila["l25"]
+
     if completa:
         try:
             guardar_resumen_run(run_id, uk)
@@ -905,9 +938,10 @@ def resultados():
         resumen_worker=resumen_worker,  # ahora viene de la BD
         mejor_comuna=mejor_comuna,
         mejor_roi=mejor_roi,
-        resumen_run=resumen_run
+        resumen_run=resumen_run,
+        locales_rows=locales_rows,
+        totales_locales=totales_locales
     )
-
 
 def run_genetic_algorithm(app, thread_id, user_inputs, constants, 
                          population_size, max_generations, elite_percentage,
