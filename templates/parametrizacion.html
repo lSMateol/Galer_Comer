@@ -31,15 +31,26 @@
                 <div class="col-md-4">
                   <input type="hidden" name="comuna_{{ i }}" value="{{ i }}">
                   <label for="tamLote{{ i }}" class="form-label">Tamaño del Lote (m²)</label>
-                  <input type="number" class="form-control" id="tamLote{{ i }}" name="tam_lote_{{ i }}" required min="1000" max="10000">
+                  <input
+                    type="number" class="form-control" id="tamLote{{ i }}" name="tam_lote_{{ i }}"
+                    required min="5000" max="6000" step="100" inputmode="numeric">
+                  <div class="invalid-feedback">
+                    Solo se permiten: 5000, 5100, …, 6000.
+                  </div>
                 </div>
                 <div class="col-md-4">
                   <label for="canPri{{ i }}" class="form-label">Vías Primarias</label>
-                  <input type="number" class="form-control" id="canPri{{ i }}" name="can_pri_{{ i }}" required min="0" max="10">
+                  <input
+                    type="number" class="form-control" id="canPri{{ i }}" name="can_pri_{{ i }}"
+                    required min="0" max="4" step="1" inputmode="numeric">
+                  <div class="invalid-feedback">El valor debe ser 0, 1, 2, 3 o 4.</div>
                 </div>
                 <div class="col-md-4">
                   <label for="canSec{{ i }}" class="form-label">Vías Secundarias</label>
-                  <input type="number" class="form-control" id="canSec{{ i }}" name="can_sec_{{ i }}" required min="0" max="10">
+                  <input
+                    type="number" class="form-control" id="canSec{{ i }}" name="can_sec_{{ i }}"
+                    required min="0" max="4" step="1" inputmode="numeric">
+                  <div class="invalid-feedback">El valor debe ser 0, 1, 2, 3 o 4.</div>
                 </div>
               </div>
             </div>
@@ -54,15 +65,20 @@
               <div class="row g-3">
                 <div class="col-md-4">
                   <label for="tamLote7" class="form-label">Tamaño del Lote (m²)</label>
-                  <input type="number" class="form-control" id="tamLote7" name="tam_lote_7" required min="1000" max="10000">
+                  <input type="number" class="form-control" id="tamLote7" name="tam_lote_7" required min="5000" max="6000" step="100" inputmode="numeric">
+                  <div class="invalid-feedback">
+                  Solo se permiten: 5000, 5100, …, 6000.
+                  </div>
                 </div>
                 <div class="col-md-4">
                   <label for="canPri7" class="form-label">Vías Primarias</label>
-                  <input type="number" class="form-control" id="canPri7" name="can_pri_7" required min="0" max="10">
+                  <input type="number" class="form-control" id="canPri7" name="can_pri_7" required min="0" max="4" step="1" inputmode="numeric">
+                  <div class="invalid-feedback">El valor debe ser 0, 1, 2, 3 o 4.</div>
                 </div>
                 <div class="col-md-4">
                   <label for="canSec7" class="form-label">Vías Secundarias</label>
-                  <input type="number" class="form-control" id="canSec7" name="can_sec_7" required min="0" max="10">
+                  <input type="number" class="form-control" id="canSec7" name="can_sec_7" required min="0" max="4" step="1" inputmode="numeric">
+                  <div class="invalid-feedback">El valor debe ser 0, 1, 2, 3 o 4.</div>
                 </div>
               </div>
             </div>
@@ -220,4 +236,83 @@
     });
   });
   </script>
+
+  <script>
+  document.addEventListener("DOMContentLoaded", function () {
+    const form = document.getElementById("param-form");
+
+    // Regla: lotes solo 5000..6000 y múltiplos de 100
+    function validaLote(inp) {
+      const v = Number(inp.value);
+      let msg = "";
+      if (Number.isNaN(v)) msg = "Ingresa un número.";
+      else if (v < 5000 || v > 6000) msg = "Debe estar entre 5000 y 6000.";
+      else if (v % 100 !== 0) msg = "Solo múltiplos de 100: 5000, 5100, …, 6000.";
+      inp.setCustomValidity(msg);
+      inp.classList.toggle("is-invalid", !!msg);
+      return !msg;
+    }
+
+    // Regla: vías 0..4 enteros
+    function validaVias(inp) {
+      const v = Number(inp.value);
+      let msg = "";
+      if (Number.isNaN(v)) msg = "Ingresa un número.";
+      else if (!Number.isInteger(v)) msg = "Debe ser un número entero.";
+      else if (v < 0 || v > 4) msg = "Solo 0, 1, 2, 3 o 4.";
+      inp.setCustomValidity(msg);
+      inp.classList.toggle("is-invalid", !!msg);
+      return !msg;
+    }
+
+    // Suscribir inputs (funciona para las 7 galerías)
+    const lotes = form.querySelectorAll('input[name^="tam_lote_"]');
+    const viasP = form.querySelectorAll('input[name^="can_pri_"]');
+    const viasS = form.querySelectorAll('input[name^="can_sec_"]');
+
+    lotes.forEach(inp => {
+      // Sugerencia visual y teclado numérico
+      inp.setAttribute("min", "5000");
+      inp.setAttribute("max", "6000");
+      inp.setAttribute("step", "100");
+      inp.addEventListener("input", () => validaLote(inp));
+      inp.addEventListener("blur",  () => validaLote(inp));
+    });
+
+    [...viasP, ...viasS].forEach(inp => {
+      inp.setAttribute("min", "0");
+      inp.setAttribute("max", "4");
+      inp.setAttribute("step", "1");
+      inp.addEventListener("input", () => validaVias(inp));
+      inp.addEventListener("blur",  () => validaVias(inp));
+    });
+
+    // Validación al enviar: previene el submit y muestra advertencia
+    form.addEventListener("submit", function (ev) {
+      let ok = true;
+      lotes.forEach(inp => { ok = validaLote(inp) && ok; });
+      viasP.forEach(inp => { ok = validaVias(inp) && ok; });
+      viasS.forEach(inp => { ok = validaVias(inp) && ok; });
+
+      if (!ok) {
+        ev.preventDefault();
+        ev.stopPropagation();
+
+        // Muestra una alerta arriba (si no existe)
+        if (!document.getElementById("alertaValidacion")) {
+          const alert = document.createElement("div");
+          alert.id = "alertaValidacion";
+          alert.className = "alert alert-warning";
+          alert.innerHTML = "<strong>Revisa los campos marcados:</strong> " +
+            "El tamaño del lote debe ser 5000, 5100, …, 6000 y las vías entre 0 y 4.";
+          form.closest(".card-body").prepend(alert);
+        }
+        // desplaza a primer error
+        const firstInvalid = form.querySelector(".is-invalid");
+        if (firstInvalid) firstInvalid.scrollIntoView({ behavior: "smooth", block: "center" });
+      }
+    }, true);
+  });
+</script>
+
 {% endblock %}

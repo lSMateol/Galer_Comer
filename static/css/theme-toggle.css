@@ -101,8 +101,8 @@ body::before {
 
 /* Tablas rayadas – modo oscuro */
 html[data-theme="dark"] .table-striped > tbody > tr:nth-of-type(odd) > * {
-  --bs-table-color-type: var(--text);           /* texto del tema */
-  --bs-table-bg-type: rgba(255, 255, 255, 0.04); /* fondo sútil */
+  --bs-table-color-type: #ffffff;           /* texto del tema */
+  --bs-table-bg-type: var(--bs-table-striped-bg); /* fondo sútil */
 }
 
 /* Tablas rayadas – modo claro */
