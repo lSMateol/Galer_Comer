@@ -53,8 +53,7 @@
       <div class="col-12 col-md-6 col-lg-4">
         <img src="{{ url_for('static', filename='images/logo.png') }}" alt="Logo" height="40" class="mb-3">
         <p class="small">
-          Aplicativo Web para la Delimitación del Tamaño y Localización de Galerías Comerciales.<br>
-          <span class="text-muted">Universidad de Cundinamarca &copy; 2025</span>
+          Aplicativo web para la delimitación del tamaño y localización de galerías comerciales en Soacha: modelo basado en algoritmos genéticos.<br>
         </p>
       </div>
 
@@ -67,6 +66,7 @@
           <li class="mb-2"><a href="{{ url_for('historial') }}" class="text-light text-decoration-none">Historial</a></li>
           <li class="mb-2"><a href="{{ url_for('comparativo') }}" class="text-light text-decoration-none">Comparativo</a></li>
           <li class="mb-2"><a href="{{ url_for('como_usar') }}" class="text-light text-decoration-none">Cómo usar</a></li>
+          <li class="mb-2"><a href="{{ url_for('resumen_corrida') }}" class="text-light text-decoration-none">Resumen por Proyecto</a></li>
         </ul>
       </div>
 
@@ -82,18 +82,10 @@
       <div class="col-12 col-md-6 col-lg-4">
         <h6 class="fw-bold mb-3">Contacto</h6>
         <ul class="list-unstyled small">
-          <li class="mb-2"><i class="bi bi-envelope me-2"></i><a href="mailto:proyecto@galer-comer.edu.co" class="text-light text-decoration-none">proyecto@galer-comer.edu.co</a></li>
+          <li class="mb-2"><i class="bi bi-envelope me-2"></i><a href="mailto:smateobarbosa@ucundinamarca.edu.co" class="text-light text-decoration-none">smateobarbosa@ucundinamarca.edu.co</a></li>
           <li class="mb-2"><i class="bi bi-geo-alt me-2"></i>Universidad de Cundinamarca - Soacha</li>
           <li><i class="bi bi-clock me-2"></i>Lun - Vie: 8:00-17:00</li>
         </ul>
-
-        <!-- Redes centradas en móvil -->
-        <div class="mt-3 d-flex justify-content-center justify-content-lg-start">
-          <a href="#" class="text-light me-3 fs-5"><i class="bi bi-facebook"></i></a>
-          <a href="#" class="text-light me-3 fs-5"><i class="bi bi-twitter-x"></i></a>
-          <a href="#" class="text-light me-3 fs-5"><i class="bi bi-linkedin"></i></a>
-          <a href="#" class="text-light fs-5"><i class="bi bi-github"></i></a>
-        </div>
       </div>
     </div>
 
@@ -125,9 +117,13 @@
 
   // Lee preferencia previa
   const saved = localStorage.getItem('theme');
-  if (saved === 'light') {
+  if (saved === 'dark') {  // Cambiado de 'light' a 'dark'
+    htmlEl.setAttribute('data-theme', 'dark');
+    switchEl.checked = false;  // Cambiado de true a false
+  } else {
+    // Por defecto será modo claro
     htmlEl.setAttribute('data-theme', 'light');
-    switchEl.checked = true;
+    switchEl.checked = true;  // Cambiado de false a true
   }
 
   // Escucha cambios
