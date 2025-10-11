@@ -15,6 +15,7 @@ import time
 import os
 import io
 import csv
+from flask_cors import CORS
 
 load_dotenv()
 
@@ -39,6 +40,18 @@ if not db_url:
     db_url = "postgresql://postgres:postgres@localhost:5432/postgres"
 
 app = Flask(__name__)
+
+# CONFIGURACIÓN CORS MEJORADA PARA APP MÓVIL
+CORS(app, 
+     resources={
+         r"/*": {
+             "origins": ["http://localhost:8100", "http://localhost:4200", "capacitor://localhost", "http://localhost"],
+             "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+             "allow_headers": ["Content-Type", "Authorization", "X-Requested-With", "Accept"]
+         }
+     },
+     supports_credentials=True)
+
 app.secret_key = SECRET_KEY
 
 # Configuracion de la base de datos - FORMA CORRECTA
@@ -50,6 +63,35 @@ app.config["LOG_LEVEL"] = os.environ.get("LOG_LEVEL", "INFO")
 db.init_app(app)
 
 app.config['EXECUTION_LOGS'] = {}
+
+# Manejo de pre-flight OPTIONS para CORS
+@app.before_request
+def handle_preflight():
+    if request.method == "OPTIONS":
+        response = Response()
+        response.headers.add("Access-Control-Allow-Origin", 
+                           request.headers.get("Origin", "*"))
+        response.headers.add("Access-Control-Allow-Headers", 
+                           "Content-Type,Authorization,X-Requested-With,Accept")
+        response.headers.add("Access-Control-Allow-Methods", 
+                           "GET,POST,PUT,DELETE,OPTIONS")
+        response.headers.add("Access-Control-Allow-Credentials", "true")
+        return response
+
+# Headers de seguridad adicionales
+@app.after_request
+def after_request(response):
+    # Headers adicionales para seguridad en móvil
+    response.headers.add('X-Content-Type-Options', 'nosniff')
+    response.headers.add('X-Frame-Options', 'DENY')
+    response.headers.add('X-XSS-Protection', '1; mode=block')
+    response.headers.add('Strict-Transport-Security', 'max-age=31536000; includeSubDomains')
+    
+    # CORS headers adicionales
+    if request.method == 'OPTIONS':
+        response.headers.add('Access-Control-Max-Age', '86400')  # 24 horas
+    
+    return response
 
 def only_dev(f):
     @wraps(f)
@@ -890,7 +932,7 @@ def resultados():
             "best_fitness": mejor_fila_global.mejor_fitness or 0,
         }
 
-    # 5) KPIs útiles: mejor ROI entre 1..6 (para “mejor comuna” de las existentes)
+    # 5) KPIs útiles: mejor ROI entre 1..6 (para "mejor comuna" de las existentes)
     mejor_comuna, mejor_roi = None, None
     if ejecuciones:
         base = [e for e in ejecuciones if e.comuna and e.comuna <= 6]
@@ -1260,7 +1302,7 @@ def historial():
     Muestra: fecha última, si está completa (7/7), y el mejor ROI de esa corrida.
     Permite filtrar por run_id (?q=) y paginar (?page=, ?per_page=).
     """
-    uk = get_or_create_user_key()  # ← identifica al “usuario” por cookie
+    uk = get_or_create_user_key()  # ← identifica al "usuario" por cookie
 
     # Filtros opcionales
     term = (request.args.get("q") or "").strip()
@@ -1695,6 +1737,258 @@ def como_usar():
 @app.route('/legal')
 def legal():
     return render_template('legal.html')
+
+# =============================================
+# RUTAS ESPECÍFICAS PARA APP MÓVIL
+# =============================================
+
+@app.route('/api/mobile/parametrizacion', methods=['POST'])
+def mobile_parametrizacion():
+    """Versión simplificada para móvil de la parametrización"""
+    try:
+        data = request.get_json()
+        
+        # Validar datos mínimos
+        if not data or 'comunas' not in data:
+            return jsonify({'error': 'Datos incompletos'}), 400
+        
+        # Preparar datos en formato compatible con tu lógica existente
+        galerias_existentes = []
+        
+        for i, comuna_data in enumerate(data['comunas']):
+            galeria_data = {
+                'numero': i + 1,
+                'comuna': i + 1,
+                'tam_lote': comuna_data.get('tam_lote', 5000),
+                'can_pri': comuna_data.get('can_pri', 2),
+                'can_sec': comuna_data.get('can_sec', 1),
+                'constants': {
+                    'g_TamPar': comuna_data.get('tam_lote', 5000) * 0.4,
+                    'g_TaUtPa': comuna_data.get('tam_lote', 5000) * 0.4 * 0.7,
+                },
+                'user_inputs': {
+                    'g_TamLot': comuna_data.get('tam_lote', 5000),
+                    'b_CanPri': comuna_data.get('can_pri', 2),
+                    'b_CanSec': comuna_data.get('can_sec', 1),
+                    'comuna': i + 1
+                }
+            }
+            galerias_existentes.append(galeria_data)
+        
+        # Obtener pesos
+        pesos = data.get('weights', {'be': 40, 'bs': 40, 'mun': 20})
+        weights = (pesos.get('be', 40) / 100, 
+                  pesos.get('bs', 40) / 100, 
+                  pesos.get('mun', 20) / 100)
+        
+        # Guardar en sesión
+        session['weights'] = weights
+        session['galerias_existentes'] = galerias_existentes
+        
+        # Parámetros por defecto optimizados para móvil
+        session['population_size'] = data.get('population_size', 30)  # Reducido para móvil
+        session['max_generations'] = data.get('max_generations', 100)  # Reducido para móvil
+        session['elite_percentage'] = data.get('elite_percentage', 0.1)
+        session['mutation_rate'] = data.get('mutation_rate', 0.05)
+        session['sigma_factor'] = data.get('sigma_factor', 0.1)
+        session['crossover_rate'] = data.get('crossover_rate', 0.7)
+        
+        # Ejecutar procesamiento
+        thread_id = str(time.time())
+        session['thread_id'] = thread_id
+        run_id = str(uuid.uuid4())
+        session['last_run_id'] = run_id
+        
+        uk = get_or_create_user_key()
+        
+        # En producción, ejecutar síncrono
+        if SYNC_MODE:
+            try:
+                procesar_todas_galerias(
+                    app, thread_id, galerias_existentes,
+                    session['population_size'], session['max_generations'],
+                    session['elite_percentage'], session['mutation_rate'],
+                    session['sigma_factor'], session['crossover_rate'],
+                    weights, run_id, uk
+                )
+                return jsonify({
+                    'status': 'success',
+                    'run_id': run_id,
+                    'message': 'Procesamiento completado'
+                })
+            except Exception as e:
+                return jsonify({
+                    'status': 'error',
+                    'message': f'Error en procesamiento: {str(e)}'
+                }), 500
+        else:
+            # Modo asíncrono
+            thread = threading.Thread(
+                target=procesar_todas_galerias,
+                args=(app, thread_id, galerias_existentes,
+                      session['population_size'], session['max_generations'],
+                      session['elite_percentage'], session['mutation_rate'],
+                      session['sigma_factor'], session['crossover_rate'],
+                      weights, run_id, uk)
+            )
+            thread.daemon = True
+            thread.start()
+            
+            return jsonify({
+                'status': 'processing',
+                'thread_id': thread_id,
+                'run_id': run_id,
+                'message': 'Procesamiento iniciado en segundo plano'
+            })
+            
+    except Exception as e:
+        return jsonify({
+            'status': 'error',
+            'message': f'Error en parametrización: {str(e)}'
+        }), 500
+
+@app.route('/api/mobile/historial', methods=['GET'])
+def mobile_historial():
+    """Obtener historial simplificado para móvil"""
+    try:
+        uk = get_or_create_user_key()
+        
+        # Consulta optimizada para móvil
+        historial = (db.session.query(
+                Ejecucion.run_id,
+                func.count(Ejecucion.id).label('filas'),
+                func.max(Ejecucion.fecha_ejecucion).label('ultima_fecha'),
+                func.max(Ejecucion.roi).label('mejor_roi'),
+                func.max(Ejecucion.mejor_fitness).label('mejor_fitness')
+            )
+            .filter(Ejecucion.user_key == uk)
+            .group_by(Ejecucion.run_id)
+            .order_by(func.max(Ejecucion.fecha_ejecucion).desc())
+            .limit(20)  # Límite para móvil
+            .all())
+        
+        resultado = []
+        for h in historial:
+            resultado.append({
+                'run_id': h.run_id,
+                'filas': h.filas,
+                'completa': h.filas >= 7,
+                'ultima_fecha': h.ultima_fecha.isoformat() if h.ultima_fecha else None,
+                'mejor_roi': float(h.mejor_roi or 0),
+                'mejor_fitness': float(h.mejor_fitness or 0)
+            })
+        
+        return jsonify({
+            'status': 'success',
+            'data': resultado
+        })
+        
+    except Exception as e:
+        return jsonify({
+            'status': 'error',
+            'message': f'Error obteniendo historial: {str(e)}'
+        }), 500
+
+@app.route('/api/mobile/resultados/<run_id>', methods=['GET'])
+def mobile_resultados(run_id):
+    """Obtener resultados específicos para móvil"""
+    try:
+        uk = get_or_create_user_key()
+        
+        ejecuciones = (Ejecucion.query
+            .filter_by(run_id=run_id, user_key=uk)
+            .order_by(Ejecucion.comuna.asc())
+            .all())
+        
+        if not ejecuciones:
+            return jsonify({
+                'status': 'error',
+                'message': 'No se encontraron resultados para este run_id'
+            }), 404
+        
+        # Preparar datos simplificados para móvil
+        resultados = []
+        metricas_totales = {
+            'total_inversion': 0,
+            'total_utilidad': 0,
+            'promedio_roi': 0,
+            'promedio_fitness': 0
+        }
+        
+        for e in ejecuciones:
+            resultado = {
+                'comuna': e.comuna,
+                'tipo': 'Existente' if e.comuna <= 6 else 'Nueva',
+                'fitness': float(e.mejor_fitness or 0),
+                'roi': float(e.roi or 0),
+                'inversion': float(e.inv_inicial_usd or 0),
+                'utilidad': float(e.utilidad_neta_usd or 0),
+                'empleos': int(e.empleos_directos or 0),
+                'beneficio_social': float(e.beneficio_social or 0),
+                'locales_12': getattr(e, 'locales_12', 0),
+                'locales_16': getattr(e, 'locales_16', 0),
+                'locales_20': getattr(e, 'locales_20', 0),
+                'locales_25': getattr(e, 'locales_25', 0)
+            }
+            resultados.append(resultado)
+            
+            # Acumular totales
+            metricas_totales['total_inversion'] += resultado['inversion']
+            metricas_totales['total_utilidad'] += resultado['utilidad']
+        
+        # Calcular promedios
+        if ejecuciones:
+            metricas_totales['promedio_roi'] = sum(r['roi'] for r in resultados) / len(resultados)
+            metricas_totales['promedio_fitness'] = sum(r['fitness'] for r in resultados) / len(resultados)
+        
+        return jsonify({
+            'status': 'success',
+            'run_id': run_id,
+            'completa': len(ejecuciones) >= 7,
+            'resultados': resultados,
+            'metricas_totales': metricas_totales,
+            'fecha_ejecucion': ejecuciones[0].fecha_ejecucion.isoformat() if ejecuciones[0].fecha_ejecucion else None
+        })
+        
+    except Exception as e:
+        return jsonify({
+            'status': 'error',
+            'message': f'Error obteniendo resultados: {str(e)}'
+        }), 500
+
+@app.route('/api/mobile/status/<thread_id>', methods=['GET'])
+def mobile_status(thread_id):
+    """Verificar estado del procesamiento"""
+    try:
+        uk = get_or_create_user_key()
+        nskey = _ns(uk, thread_id)
+        
+        logs = app.config.get('EXECUTION_LOGS', {}).get(nskey, [])
+        has_results = 'RESULTS' in app.config and nskey in app.config['RESULTS']
+        
+        # Determinar progreso aproximado
+        progreso = 0
+        if logs:
+            galerias_procesadas = sum(1 for log in logs if 'GALERIA_' in log and 'COMPLETADA' in log)
+            progreso = min(100, int((galerias_procesadas / 7) * 100))
+        
+        return jsonify({
+            'status': 'completado' if has_results else 'procesando',
+            'progreso': progreso,
+            'logs_recientes': logs[-10:] if logs else [],  # Últimos 10 logs
+            'has_results': has_results
+        })
+        
+    except Exception as e:
+        return jsonify({
+            'status': 'error',
+            'message': f'Error verificando estado: {str(e)}'
+        }), 500
+
+# =============================================
+# FIN RUTAS ESPECÍFICAS PARA APP MÓVIL
+# =============================================
+
 if __name__ == '__main__':
     # Inicializar estructuras de datos si no existen
     if 'EXECUTION_LOGS' not in app.config:
