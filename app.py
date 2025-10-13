@@ -40,20 +40,28 @@ if not db_url:
     db_url = "postgresql://postgres:postgres@localhost:5432/postgres"
 
 app = Flask(__name__)
+app.secret_key = SECRET_KEY
 
 # CONFIGURACIÓN CORS MEJORADA PARA APP MÓVIL
 CORS(app, 
      resources={
          r"/*": {
-             "origins": ["http://localhost:8100", "http://localhost:4200", "capacitor://localhost", "http://localhost"],
+             "origins": [
+                 "http://localhost:8100", 
+                 "http://localhost:4200", 
+                 "capacitor://localhost", 
+                 "http://localhost",
+                 "https://localhost"  
+             ],
              "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-             "allow_headers": ["Content-Type", "Authorization", "X-Requested-With", "Accept"]
+             "allow_headers": ["Content-Type", "Authorization", "X-Requested-With", "Accept", "User-Key"],
          }
      },
      supports_credentials=True)
 
-app.secret_key = SECRET_KEY
-
+app.config['EXECUTION_LOGS'] = {}
+app.config['EXECUTION_PROGRESS'] = {}  
+app.config['RESULTS'] = {}
 # Configuracion de la base de datos - FORMA CORRECTA
 app.config['SQLALCHEMY_DATABASE_URI'] = db_url or "sqlite:///local.db"
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
@@ -61,8 +69,6 @@ app.config["ENVIRONMENT"] = ENVIRONMENT
 app.config["LOG_LEVEL"] = os.environ.get("LOG_LEVEL", "INFO")
 
 db.init_app(app)
-
-app.config['EXECUTION_LOGS'] = {}
 
 # Manejo de pre-flight OPTIONS para CORS
 @app.before_request
@@ -72,7 +78,7 @@ def handle_preflight():
         response.headers.add("Access-Control-Allow-Origin", 
                            request.headers.get("Origin", "*"))
         response.headers.add("Access-Control-Allow-Headers", 
-                           "Content-Type,Authorization,X-Requested-With,Accept")
+                           "Content-Type,Authorization,X-Requested-With,Accept,User-Key")
         response.headers.add("Access-Control-Allow-Methods", 
                            "GET,POST,PUT,DELETE,OPTIONS")
         response.headers.add("Access-Control-Allow-Credentials", "true")
@@ -102,16 +108,39 @@ def only_dev(f):
     return _w
 
 def get_or_create_user_key(resp=None):
+    """
+    Obtiene el user_key de los headers HTTP (prioridad) o genera uno nuevo
+    Para la API móvil que usa headers en lugar de cookies
+    """
+    # 1. PRIORIDAD: Obtener del header 'User-Key'
+    uk = request.headers.get('User-Key')
+    
+    if uk:
+        print(f"✅ User-Key obtenido del header: {uk}")
+        return uk
+    
+    # 2. FALLBACK: Intentar de la cookie (para compatibilidad con web)
     uk = request.cookies.get(ANON_COOKIE)
-    if not uk:
-        uk = str(uuid.uuid4())
-        if resp is None:
-            g._set_user_cookie = uk
-        else:
-            resp.set_cookie(ANON_COOKIE, uk, max_age=60*60*24*180,
-                            httponly=True, samesite="Lax", secure=True)
+    if uk:
+        print(f"🔄 User-Key obtenido de cookie: {uk}")
+        return uk
+    
+    # 3. ÚLTIMO RECURSO: Generar nuevo user_key
+    uk = str(uuid.uuid4())
+    print(f"🆕 User-Key generado: {uk}")
+    
+    # 4. Opcional: Setear cookie solo si se solicita (para compatibilidad web)
+    # Pero para móvil, el frontend maneja el almacenamiento
+    if resp is not None:
+        resp.set_cookie(ANON_COOKIE, uk, max_age=60*60*24*180,
+                        httponly=True, samesite="Lax", secure=True)
+        print(f"🍪 Cookie set for new user_key: {uk}")
+    else:
+        # Para contexto móvil, solo almacenar en g si es necesario
+        g._set_user_cookie = uk
+        print(f"📱 User-Key almacenado en contexto: {uk}")
+    
     return uk
-
 
 @app.after_request
 def _set_user_cookie(resp):
@@ -495,26 +524,45 @@ def procesar_todas_galerias(app, thread_id, galerias_a_procesar,
     Nota: requiere que el modelo Ejecucion tenga la columna:
       run_id = db.Column(db.String(36), index=True, nullable=False)
     """
-    nskey = _ns(user_key, thread_id)
+    nskey = f"{user_key}:{thread_id}"
 
     with app.app_context():
+        # INICIALIZACIÓN ROBUSTA
+        if 'EXECUTION_LOGS' not in app.config:
+            app.config['EXECUTION_LOGS'] = {}
+        if 'EXECUTION_PROGRESS' not in app.config:
+            app.config['EXECUTION_PROGRESS'] = {}
+        if 'RESULTS' not in app.config:
+            app.config['RESULTS'] = {}
+            
         logs = app.config['EXECUTION_LOGS'].get(nskey, [])
         
-        logs.append("=" * 60)
-        logs.append("PROCESANDO LAS 7 GALERiAS COMERCIALES")
-        logs.append("=" * 60)
-
-        # Dejar evidencia de que no se borra el historial
-        logs.append(f"[{datetime.utcnow().isoformat()}Z] Preservando historial (no se borra la tabla).")
-        logs.append(f"[{datetime.utcnow().isoformat()}Z] run_id={run_id} asignado a esta corrida.")
+        # INICIALIZAR PROGRESO DE FORMA EXPLÍCITA
+        app.config['EXECUTION_PROGRESS'][nskey] = {
+            'total': len(galerias_a_procesar),
+            'completadas': 0,
+            'progreso': 0,
+            'estado_actual': 'Iniciando procesamiento...',
+            'galerias_completadas': 0,
+            'galerias_totales': len(galerias_a_procesar)
+        }
+        
         app.config['EXECUTION_LOGS'][nskey] = logs
+        
+        print(f"✅ INICIALIZADO: nskey={nskey}, progreso=0%")
 
         resultados_galerias = {}
         
         try:
             # Procesar cada una de las 7 galerías
-            for galeria in galerias_a_procesar:
+            for idx, galeria in enumerate(galerias_a_procesar):
                 galeria_num = galeria['numero']
+
+                # ACTUALIZAR PROGRESO ANTES DE CADA GALERÍA
+                app.config['EXECUTION_PROGRESS'][nskey]['estado_actual'] = f'Procesando Galería {galeria_num}...'
+                app.config['EXECUTION_PROGRESS'][nskey]['completadas'] = idx
+                app.config['EXECUTION_PROGRESS'][nskey]['progreso'] = int((idx / len(galerias_a_procesar)) * 80)  # 80% para las 7 galerías
+                print(f"DEBUG: Progreso actualizado - Galería {galeria_num} - {app.config['EXECUTION_PROGRESS'][nskey]['progreso']}%")
 
                 # --- VERIFICACIÓN para evitar duplicar dentro del MISMO run_id ---
                 existing_execution = Ejecucion.query.filter_by(comuna=galeria_num, run_id=run_id).first()
@@ -549,11 +597,11 @@ def procesar_todas_galerias(app, thread_id, galerias_a_procesar,
                 full_constants = {**GLOBAL_CONSTANTS, **constants}
                 
                 # EJECUTAR GA
-                result  = run_genetic_algorithm(
+                result = run_genetic_algorithm(
                     app, 
                     f"{thread_id}_galeria_{galeria_num}",
                     user_inputs, 
-                    constants,  # Si tu GA necesita full_constants, cámbialo aquí
+                    constants,
                     population_size, 
                     max_generations,
                     elite_percentage,
@@ -613,16 +661,17 @@ def procesar_todas_galerias(app, thread_id, galerias_a_procesar,
                             beneficio_social=best_metrics.get('u_BenSoc', 0.0),
                             cromosoma_optimo=best_chromosome,
 
-                            locales_12 = int(best_metrics.get('l_CLTi12', 0) or 0),
-                            locales_16 = int(best_metrics.get('l_CLTi16', 0) or 0),
-                            locales_20 = int(best_metrics.get('l_CLTi20', 0) or 0),
-                            locales_25 = int(best_metrics.get('l_CLTi25', 0) or 0),
+                            locales_12=int(best_metrics.get('l_CLTi12', 0) or 0),
+                            locales_16=int(best_metrics.get('l_CLTi16', 0) or 0),
+                            locales_20=int(best_metrics.get('l_CLTi20', 0) or 0),
+                            locales_25=int(best_metrics.get('l_CLTi25', 0) or 0),
 
                             run_id=run_id,
-                            user_key = user_key  
+                            user_key=user_key  
                         )
                         db.session.add(nueva_ejecucion)
                         db.session.commit()
+                        logs.append(f"✅ GALERIA_{galeria_num} GUARDADA EN BD - ID: {nueva_ejecucion.id}")
                         try:
                             det = EjecucionDetalle(
                                 ejecucion_id=nueva_ejecucion.id,
@@ -661,7 +710,12 @@ def procesar_todas_galerias(app, thread_id, galerias_a_procesar,
                     except Exception as db_e:
                         db.session.rollback()
                         logs.append(f"Error al guardar Galeria {galeria_num}: {str(db_e)}")
+                        logs.append(f"TRACEBACK: {traceback.format_exc()}")
                 
+                # ACTUALIZAR PROGRESO DESPUÉS DE CADA GALERÍA
+                app.config['EXECUTION_PROGRESS'][nskey]['completadas'] = idx + 1
+                app.config['EXECUTION_PROGRESS'][nskey]['progreso'] = int(((idx + 1) / len(galerias_a_procesar)) * 80)
+                logs.append(f"✅ Galeria {galeria_num} completada - Progreso: {app.config['EXECUTION_PROGRESS'][nskey]['progreso']}%")
                 app.config['EXECUTION_LOGS'][nskey] = logs
             
             # Después de procesar las 6 galerías, encontrar la mejor
@@ -702,6 +756,9 @@ def procesar_todas_galerias(app, thread_id, galerias_a_procesar,
                     galeria_7['user_inputs']['comuna'] = mejor_comuna
                     galeria_7['best_metrics']['comuna'] = mejor_comuna
 
+                # ACTUALIZAR PROGRESO PARA GALERÍA 7
+                app.config['EXECUTION_PROGRESS'][nskey]['estado_actual'] = f'Optimizando Galería 7 para Comuna {mejor_comuna}...'
+                app.config['EXECUTION_PROGRESS'][nskey]['progreso'] = 85
                 logs.append(f"Optimizando Galeria 7 para la Comuna {mejor_comuna}...")
                 app.config['EXECUTION_LOGS'][nskey] = logs
 
@@ -728,6 +785,7 @@ def procesar_todas_galerias(app, thread_id, galerias_a_procesar,
                     best_fitness_7 = 0.0
                 else:
                     best_chromosome_7, best_metrics_7, best_fitness_7 = result_final_7
+                    
                 # GUARDAR EN BD LA GALERÍA 7
                 try:
                     ejec_7 = Ejecucion(
@@ -756,17 +814,17 @@ def procesar_todas_galerias(app, thread_id, galerias_a_procesar,
                         beneficio_social=best_metrics_7.get('u_BenSoc', 0.0),
                         cromosoma_optimo=best_chromosome_7,
                         
-                        locales_12 = int(best_metrics_7.get('l_CLTi12', 0) or 0),
-                        locales_16 = int(best_metrics_7.get('l_CLTi16', 0) or 0),
-                        locales_20 = int(best_metrics_7.get('l_CLTi20', 0) or 0),
-                        locales_25 = int(best_metrics_7.get('l_CLTi25', 0) or 0),
+                        locales_12=int(best_metrics_7.get('l_CLTi12', 0) or 0),
+                        locales_16=int(best_metrics_7.get('l_CLTi16', 0) or 0),
+                        locales_20=int(best_metrics_7.get('l_CLTi20', 0) or 0),
+                        locales_25=int(best_metrics_7.get('l_CLTi25', 0) or 0),
 
-                        user_key = user_key,
+                        user_key=user_key,
                         run_id=run_id
                     )
                     db.session.add(ejec_7)
                     db.session.commit()
-                    
+                    logs.append(f"✅ GALERIA_{7} GUARDADA EN BD - ID: {nueva_ejecucion.id}")
                     try:
                         det7 = EjecucionDetalle(
                             ejecucion_id=ejec_7.id,
@@ -806,6 +864,11 @@ def procesar_todas_galerias(app, thread_id, galerias_a_procesar,
                     db.session.rollback()
                     logs.append(f"Error al guardar Galeria 7: {str(e)}")
 
+                # COMPLETAR PROGRESO
+                app.config['EXECUTION_PROGRESS'][nskey]['completadas'] = app.config['EXECUTION_PROGRESS'][nskey]['total']
+                app.config['EXECUTION_PROGRESS'][nskey]['progreso'] = 100
+                app.config['EXECUTION_PROGRESS'][nskey]['estado_actual'] = 'Procesamiento completado'
+
                 # Almacenar resultados finales para UI
                 if 'RESULTS' not in app.config:
                     app.config['RESULTS'] = {}
@@ -819,7 +882,7 @@ def procesar_todas_galerias(app, thread_id, galerias_a_procesar,
                     'run_id': run_id
                 }
                 
-                logs.append("PROCESAMIENTO COMPLETADO")
+                logs.append("✅ PROCESAMIENTO COMPLETADO")
 
                 try:
                     guardar_resumen_run(run_id, user_key)
@@ -834,6 +897,9 @@ def procesar_todas_galerias(app, thread_id, galerias_a_procesar,
             logs.append(error_msg)
             traceback_str = traceback.format_exc()
             logs.append(traceback_str)
+            
+            # ACTUALIZAR PROGRESO EN CASO DE ERROR
+            app.config['EXECUTION_PROGRESS'][nskey]['estado_actual'] = f'Error: {str(e)}'
             
             if 'RESULTS' not in app.config:
                 app.config['RESULTS'] = {}
@@ -868,6 +934,25 @@ def get_logs(thread_id):
         status = "completado"
     
     return jsonify({"logs": logs, "status": status, "has_results": has_results})
+
+@app.route('/api/debug/progress')
+def debug_progress():
+    """Endpoint de diagnóstico mejorado"""
+    progress_data = {}
+    for key, value in app.config.get('EXECUTION_PROGRESS', {}).items():
+        progress_data[key] = {
+            'progreso': value.get('progreso', 0),
+            'estado': value.get('estado_actual', 'Unknown'),
+            'completadas': value.get('completadas', 0),
+            'total': value.get('total', 0)
+        }
+    
+    return jsonify({
+        'EXECUTION_PROGRESS': progress_data,
+        'EXECUTION_LOGS_keys': list(app.config.get('EXECUTION_LOGS', {}).keys()),
+        'RESULTS_keys': list(app.config.get('RESULTS', {}).keys()),
+        'total_threads': len(app.config.get('EXECUTION_PROGRESS', {}))
+    })
 
 @app.route('/resultados')
 def resultados():
@@ -1641,7 +1726,6 @@ def resumen_corrida():
         limit=limit,
     )
 
-
 @app.route("/resumen-corrida.csv")
 def resumen_corrida_csv():
     """Exporta el mismo resumen como CSV (GLOBAL) respetando los filtros."""
@@ -1742,249 +1826,581 @@ def legal():
 # RUTAS ESPECÍFICAS PARA APP MÓVIL
 # =============================================
 
-@app.route('/api/mobile/parametrizacion', methods=['POST'])
-def mobile_parametrizacion():
-    """Versión simplificada para móvil de la parametrización"""
-    try:
-        data = request.get_json()
-        
-        # Validar datos mínimos
-        if not data or 'comunas' not in data:
-            return jsonify({'error': 'Datos incompletos'}), 400
-        
-        # Preparar datos en formato compatible con tu lógica existente
-        galerias_existentes = []
-        
-        for i, comuna_data in enumerate(data['comunas']):
-            galeria_data = {
-                'numero': i + 1,
-                'comuna': i + 1,
-                'tam_lote': comuna_data.get('tam_lote', 5000),
-                'can_pri': comuna_data.get('can_pri', 2),
-                'can_sec': comuna_data.get('can_sec', 1),
-                'constants': {
-                    'g_TamPar': comuna_data.get('tam_lote', 5000) * 0.4,
-                    'g_TaUtPa': comuna_data.get('tam_lote', 5000) * 0.4 * 0.7,
-                },
-                'user_inputs': {
-                    'g_TamLot': comuna_data.get('tam_lote', 5000),
-                    'b_CanPri': comuna_data.get('can_pri', 2),
-                    'b_CanSec': comuna_data.get('can_sec', 1),
-                    'comuna': i + 1
-                }
-            }
-            galerias_existentes.append(galeria_data)
-        
-        # Obtener pesos
-        pesos = data.get('weights', {'be': 40, 'bs': 40, 'mun': 20})
-        weights = (pesos.get('be', 40) / 100, 
-                  pesos.get('bs', 40) / 100, 
-                  pesos.get('mun', 20) / 100)
-        
-        # Guardar en sesión
-        session['weights'] = weights
-        session['galerias_existentes'] = galerias_existentes
-        
-        # Parámetros por defecto optimizados para móvil
-        session['population_size'] = data.get('population_size', 30)  # Reducido para móvil
-        session['max_generations'] = data.get('max_generations', 100)  # Reducido para móvil
-        session['elite_percentage'] = data.get('elite_percentage', 0.1)
-        session['mutation_rate'] = data.get('mutation_rate', 0.05)
-        session['sigma_factor'] = data.get('sigma_factor', 0.1)
-        session['crossover_rate'] = data.get('crossover_rate', 0.7)
-        
-        # Ejecutar procesamiento
-        thread_id = str(time.time())
-        session['thread_id'] = thread_id
-        run_id = str(uuid.uuid4())
-        session['last_run_id'] = run_id
-        
-        uk = get_or_create_user_key()
-        
-        # En producción, ejecutar síncrono
-        if SYNC_MODE:
-            try:
-                procesar_todas_galerias(
-                    app, thread_id, galerias_existentes,
-                    session['population_size'], session['max_generations'],
-                    session['elite_percentage'], session['mutation_rate'],
-                    session['sigma_factor'], session['crossover_rate'],
-                    weights, run_id, uk
-                )
-                return jsonify({
-                    'status': 'success',
-                    'run_id': run_id,
-                    'message': 'Procesamiento completado'
-                })
-            except Exception as e:
-                return jsonify({
-                    'status': 'error',
-                    'message': f'Error en procesamiento: {str(e)}'
-                }), 500
-        else:
-            # Modo asíncrono
-            thread = threading.Thread(
-                target=procesar_todas_galerias,
-                args=(app, thread_id, galerias_existentes,
-                      session['population_size'], session['max_generations'],
-                      session['elite_percentage'], session['mutation_rate'],
-                      session['sigma_factor'], session['crossover_rate'],
-                      weights, run_id, uk)
-            )
-            thread.daemon = True
-            thread.start()
-            
-            return jsonify({
-                'status': 'processing',
-                'thread_id': thread_id,
-                'run_id': run_id,
-                'message': 'Procesamiento iniciado en segundo plano'
-            })
-            
-    except Exception as e:
-        return jsonify({
-            'status': 'error',
-            'message': f'Error en parametrización: {str(e)}'
-        }), 500
+# =============================================================================
+# ENDPOINTS PARA APP MÓVIL - AGREGAR ESTO AL FINAL DEL ARCHIVO app.py
+# =============================================================================
 
 @app.route('/api/mobile/historial', methods=['GET'])
-def mobile_historial():
-    """Obtener historial simplificado para móvil"""
+def api_mobile_historial():
+    """Endpoint para obtener el historial de ejecuciones (para app móvil)"""
     try:
         uk = get_or_create_user_key()
+        print(f"📊 Obteniendo historial para user_key: {uk}")
         
-        # Consulta optimizada para móvil
-        historial = (db.session.query(
-                Ejecucion.run_id,
-                func.count(Ejecucion.id).label('filas'),
-                func.max(Ejecucion.fecha_ejecucion).label('ultima_fecha'),
-                func.max(Ejecucion.roi).label('mejor_roi'),
-                func.max(Ejecucion.mejor_fitness).label('mejor_fitness')
-            )
-            .filter(Ejecucion.user_key == uk)
-            .group_by(Ejecucion.run_id)
-            .order_by(func.max(Ejecucion.fecha_ejecucion).desc())
-            .limit(20)  # Límite para móvil
-            .all())
+        # Obtener resumen de ejecuciones del usuario
+        corridas = (db.session.query(
+                        Ejecucion.run_id,
+                        func.count(Ejecucion.id).label('filas'),
+                        func.max(Ejecucion.fecha_ejecucion).label('ultima_fecha'),
+                        func.max(Ejecucion.roi).label('mejor_roi'),
+                        func.max(Ejecucion.mejor_fitness).label('mejor_fitness')
+                    )
+                    .filter(Ejecucion.user_key == uk)
+                    .group_by(Ejecucion.run_id)
+                    .order_by(func.max(Ejecucion.fecha_ejecucion).desc())
+                    .all())
         
-        resultado = []
-        for h in historial:
-            resultado.append({
-                'run_id': h.run_id,
-                'filas': h.filas,
-                'completa': h.filas >= 7,
-                'ultima_fecha': h.ultima_fecha.isoformat() if h.ultima_fecha else None,
-                'mejor_roi': float(h.mejor_roi or 0),
-                'mejor_fitness': float(h.mejor_fitness or 0)
+        historial_list = []
+        for c in corridas:
+            historial_list.append({
+                "run_id": c.run_id,
+                "filas": c.filas,
+                "ultima_fecha": c.ultima_fecha.isoformat() if c.ultima_fecha else None,
+                "completa": c.filas >= 7,
+                "mejor_roi": float(c.mejor_roi) if c.mejor_roi else 0,
+                "mejor_fitness": float(c.mejor_fitness) if c.mejor_fitness else 0
             })
         
         return jsonify({
-            'status': 'success',
-            'data': resultado
+            "status": "success",
+            "data": historial_list
         })
         
     except Exception as e:
+        print(f"Error obteniendo historial móvil: {str(e)}")
         return jsonify({
-            'status': 'error',
-            'message': f'Error obteniendo historial: {str(e)}'
+            "status": "error", 
+            "message": f"Error interno: {str(e)}"
         }), 500
 
 @app.route('/api/mobile/resultados/<run_id>', methods=['GET'])
-def mobile_resultados(run_id):
-    """Obtener resultados específicos para móvil"""
+def api_mobile_resultados(run_id):
+    """Endpoint MEJORADO para obtener resultados específicos (para app móvil)"""
     try:
         uk = get_or_create_user_key()
-        
+        print(f"📄 Obteniendo resultados DETALLADOS para user_key: {uk}, run: {run_id}")
+
+        # Obtener ejecuciones para este run_id
         ejecuciones = (Ejecucion.query
-            .filter_by(run_id=run_id, user_key=uk)
-            .order_by(Ejecucion.comuna.asc())
-            .all())
+                      .filter_by(run_id=run_id, user_key=uk)
+                      .order_by(Ejecucion.comuna.asc())
+                      .all())
         
         if not ejecuciones:
             return jsonify({
-                'status': 'error',
-                'message': 'No se encontraron resultados para este run_id'
+                "status": "error",
+                "message": "No se encontraron resultados para este run_id"
             }), 404
-        
-        # Preparar datos simplificados para móvil
-        resultados = []
-        metricas_totales = {
-            'total_inversion': 0,
-            'total_utilidad': 0,
-            'promedio_roi': 0,
-            'promedio_fitness': 0
+
+        # Obtener parámetros de la corrida (de la primera ejecución)
+        primera_ejecucion = ejecuciones[0]
+        parametros = {
+            "population_size": primera_ejecucion.poblacion_inicial,
+            "max_generations": primera_ejecucion.generaciones,
+            "elite_percentage": primera_ejecucion.porcentaje_elite,
+            "mutation_rate": primera_ejecucion.tasa_mutacion,
+            "sigma_factor": primera_ejecucion.fuerza_sigma,
+            "crossover_rate": primera_ejecucion.tasa_cruzamiento,
+            "weights": (
+                primera_ejecucion.peso_be,
+                primera_ejecucion.peso_bs,
+                primera_ejecucion.peso_mun
+            )
         }
-        
+
+        # Mejor comuna base (1..6) por ROI
+        mejor_comuna = None
+        mejor_roi = 0
+        base_ejecuciones = [e for e in ejecuciones if e.comuna <= 6]
+        if base_ejecuciones:
+            mejor_base = max(base_ejecuciones, key=lambda x: x.roi or 0)
+            mejor_comuna = mejor_base.comuna
+            mejor_roi = mejor_base.roi or 0
+
+        # Convertir a formato JSON para móvil CON TODOS LOS CAMPOS
+        resultados_list = []
         for e in ejecuciones:
-            resultado = {
-                'comuna': e.comuna,
-                'tipo': 'Existente' if e.comuna <= 6 else 'Nueva',
-                'fitness': float(e.mejor_fitness or 0),
-                'roi': float(e.roi or 0),
-                'inversion': float(e.inv_inicial_usd or 0),
-                'utilidad': float(e.utilidad_neta_usd or 0),
-                'empleos': int(e.empleos_directos or 0),
-                'beneficio_social': float(e.beneficio_social or 0),
-                'locales_12': getattr(e, 'locales_12', 0),
-                'locales_16': getattr(e, 'locales_16', 0),
-                'locales_20': getattr(e, 'locales_20', 0),
-                'locales_25': getattr(e, 'locales_25', 0)
-            }
-            resultados.append(resultado)
-            
-            # Acumular totales
-            metricas_totales['total_inversion'] += resultado['inversion']
-            metricas_totales['total_utilidad'] += resultado['utilidad']
+            resultados_list.append({
+                "comuna": e.comuna,
+                "fitness": float(e.mejor_fitness) if e.mejor_fitness else 0,
+                "roi": float(e.roi) if e.roi else 0,
+                "inversion": float(e.inv_inicial_usd) if e.inv_inicial_usd else 0,
+                "utilidad": float(e.utilidad_neta_usd) if e.utilidad_neta_usd else 0,
+                "empleos": int(e.empleos_directos) if e.empleos_directos else 0,
+                "margen": float(e.margen_utilidad) if e.margen_utilidad else 0,
+                "beneficio_social": float(e.beneficio_social) if e.beneficio_social else 0,
+                "locales_12": e.locales_12 or 0,
+                "locales_16": e.locales_16 or 0,
+                "locales_20": e.locales_20 or 0,
+                "locales_25": e.locales_25 or 0
+            })
+
+        # Calcular métricas totales
+        total_inversion = sum(r['inversion'] for r in resultados_list)
+        total_utilidad = sum(r['utilidad'] for r in resultados_list)
+        promedio_roi = (total_utilidad / total_inversion) * 100 if total_inversion > 0 else 0
+        promedio_fitness = sum(r['fitness'] for r in resultados_list) / len(resultados_list)
+
+        # Tabla de locales por tipo (totales) - COMO EN LA WEB
+        totales_locales = {
+            "l12": sum(r['locales_12'] for r in resultados_list),
+            "l16": sum(r['locales_16'] for r in resultados_list),
+            "l20": sum(r['locales_20'] for r in resultados_list),
+            "l25": sum(r['locales_25'] for r in resultados_list)
+        }
+
+        # Obtener resumen run si existe
+        resumen_run = ResumenRun.query.filter_by(user_key=uk, run_id=run_id).first()
         
-        # Calcular promedios
-        if ejecuciones:
-            metricas_totales['promedio_roi'] = sum(r['roi'] for r in resultados) / len(resultados)
-            metricas_totales['promedio_fitness'] = sum(r['fitness'] for r in resultados) / len(resultados)
-        
+        metricas_totales = {
+            "total_inversion": total_inversion,
+            "total_utilidad": total_utilidad,
+            "promedio_roi": promedio_roi,
+            "promedio_fitness": promedio_fitness,
+            "promedio_margen": resumen_run.prom_margen if resumen_run else 0,
+            "promedio_beneficio_social": resumen_run.prom_ben_social if resumen_run else 0
+        }
+
         return jsonify({
-            'status': 'success',
-            'run_id': run_id,
-            'completa': len(ejecuciones) >= 7,
-            'resultados': resultados,
-            'metricas_totales': metricas_totales,
-            'fecha_ejecucion': ejecuciones[0].fecha_ejecucion.isoformat() if ejecuciones[0].fecha_ejecucion else None
+            "status": "success",
+            "resultados": resultados_list,
+            "metricas_totales": metricas_totales,
+            "parametros": parametros,
+            "mejor_comuna": mejor_comuna,
+            "mejor_roi": mejor_roi,
+            "totales_locales": totales_locales,
+            "locales_rows": [{
+                "comuna": r["comuna"],
+                "l12": r["locales_12"],
+                "l16": r["locales_16"], 
+                "l20": r["locales_20"],
+                "l25": r["locales_25"]
+            } for r in resultados_list],
+            "completa": len(ejecuciones) >= 7
         })
         
     except Exception as e:
+        print(f"Error obteniendo resultados móviles: {str(e)}")
         return jsonify({
-            'status': 'error',
-            'message': f'Error obteniendo resultados: {str(e)}'
+            "status": "error", 
+            "message": f"Error interno: {str(e)}"
         }), 500
 
-@app.route('/api/mobile/status/<thread_id>', methods=['GET'])
-def mobile_status(thread_id):
-    """Verificar estado del procesamiento"""
+@app.route('/api/mobile/parametrizacion', methods=['POST', 'OPTIONS'])
+def mobile_ejecutar_parametrizacion():
+    """Endpoint CORREGIDO para ejecutar optimización desde la app móvil y GUARDAR en BD"""
+    
+    if request.method == 'OPTIONS':
+        return jsonify({'status':'ok'}), 200  
+    
     try:
+        # Obtener user_key para móvil PRIMERO
         uk = get_or_create_user_key()
-        nskey = _ns(uk, thread_id)
+        print(f"🚀 Ejecutando parametrización para user_key: {uk}")
         
+        data = request.get_json()
+        print(f"📨 Datos recibidos: {data}")
+
+        # Validar que hay datos
+        if not data:
+            return jsonify({
+                "status": "error", 
+                "message": "No se recibieron datos"
+            }), 400
+
+        # Extraer parámetros del request
+        weights = (
+            float(data.get('peso_be', 0.33)),
+            float(data.get('peso_bs', 0.33)),
+            float(data.get('peso_mun', 0.34))
+        )
+
+        # Crear estructura de galerías CORREGIDA
+        galerias_a_procesar = []
+        for i in range(1, 8):  # Galerías 1-7
+            galeria_data = {
+                'numero': i,
+                'comuna': i,
+                'tam_lote': int(data.get(f'tam_lote_{i}', 5000)),
+                'can_pri': int(data.get(f'can_pri_{i}', 2)),
+                'can_sec': int(data.get(f'can_sec_{i}', 1))
+            }
+            galerias_a_procesar.append(galeria_data)
+            print(f"🏗️  Galería {i}: {galeria_data}")
+
+        # Extraer parámetros del algoritmo
+        population_size = int(data.get('population_size', 50))
+        max_generations = int(data.get('max_generations', 100))
+        mutation_rate = float(data.get('mutation_rate', 0.05))
+        crossover_rate = float(data.get('crossover_rate', 0.7))
+        elite_percentage = float(data.get('elite_percentage', 0.1))
+        sigma_factor = float(data.get('sigma_factor', 0.1))
+
+        parametros_algoritmo = {
+            'population_size': population_size,
+            'max_generations': max_generations,
+            'mutation_rate': mutation_rate,
+            'crossover_rate': crossover_rate,
+            'elite_percentage': elite_percentage,
+            'sigma_factor': sigma_factor
+        }
+
+        print(f"⚙️  Parámetros algoritmo: {parametros_algoritmo}")
+        print(f"⚖️  Pesos: {weights}")
+        
+        # Generar run_id único
+        run_id = str(uuid.uuid4())
+        thread_id = str(time.time())
+        
+        print(f"📝 IDs generados - Run: {run_id}, Thread: {thread_id}")
+
+        # Inicializar logs
+        nskey = _ns(uk, thread_id)
+        if 'EXECUTION_LOGS' not in app.config:
+            app.config['EXECUTION_LOGS'] = {}
+        app.config['EXECUTION_LOGS'][nskey] = []
+        
+        # ✅ EJECUTAR Y GUARDAR EN BD (SÍNCRONO para móvil)
+        try:
+            # OPCIÓN 1: Si la función espera "galerias_a_procesar" en lugar de "galerias"
+            procesar_todas_galerias(
+                app=app,
+                thread_id=thread_id,
+                galerias_a_procesar=galerias_a_procesar,  # ← NOMBRE CORREGIDO
+                population_size=population_size,
+                max_generations=max_generations,
+                elite_percentage=elite_percentage,
+                mutation_rate=mutation_rate,
+                sigma_factor=sigma_factor,
+                crossover_rate=crossover_rate,
+                weights=weights,
+                run_id=run_id,
+                user_key=uk
+            )
+            
+            # Verificar que se guardaron datos
+            ejecuciones_guardadas = Ejecucion.query.filter_by(run_id=run_id, user_key=uk).count()
+            print(f"💾 Ejecuciones guardadas en BD: {ejecuciones_guardadas}")
+            
+            return jsonify({
+                "status": "success",
+                "message": "Optimización completada y guardada en BD",
+                "run_id": run_id,
+                "thread_id": thread_id,
+                "ejecuciones_guardadas": ejecuciones_guardadas,
+                "user_key": uk
+            })
+            
+        except Exception as e:
+            error_msg = f"Error en procesamiento: {str(e)}"
+            print(f"❌ ERROR en procesar_todas_galerias: {error_msg}")
+            import traceback
+            traceback.print_exc()
+            
+            return jsonify({
+                "status": "error",
+                "message": error_msg
+            }), 500
+            
+    except Exception as e:
+        print(f"❌ Error en mobile_ejecutar_parametrizacion: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        
+        return jsonify({
+            "status": "error", 
+            "message": f"Error interno: {str(e)}"
+        }), 500
+
+@app.route('/api/mobile/estado/<thread_id>', methods=['GET'])
+def mobile_status(thread_id):
+    """Verificar estado del procesamiento - CORREGIDO"""
+    try:
+        print(f"DEBUG mobile_status: Buscando progress para thread_id={thread_id}")
+        
+        # OBTENER USER_KEY PRIMERO
+        uk = get_or_create_user_key()
+        nskey = f"{uk}:{thread_id}"
+        
+        print(f"DEBUG mobile_status: user_key={uk}, nskey={nskey}")
+        
+        # INICIALIZAR SI NO EXISTE
+        if 'EXECUTION_PROGRESS' not in app.config:
+            app.config['EXECUTION_PROGRESS'] = {}
+            print("DEBUG: EXECUTION_PROGRESS inicializado")
+        
+        if 'EXECUTION_LOGS' not in app.config:
+            app.config['EXECUTION_LOGS'] = {}
+            print("DEBUG: EXECUTION_LOGS inicializado")
+        
+        # BUSCAR DIRECTAMENTE CON LA CLAVE CORRECTA
+        progress_data = app.config['EXECUTION_PROGRESS'].get(nskey, {})
         logs = app.config.get('EXECUTION_LOGS', {}).get(nskey, [])
         has_results = 'RESULTS' in app.config and nskey in app.config['RESULTS']
         
-        # Determinar progreso aproximado
-        progreso = 0
-        if logs:
-            galerias_procesadas = sum(1 for log in logs if 'GALERIA_' in log and 'COMPLETADA' in log)
-            progreso = min(100, int((galerias_procesadas / 7) * 100))
+        # Si no hay datos de progreso, crear estructura básica
+        if not progress_data:
+            print(f"DEBUG: No se encontró progress_data para {nskey}, creando estructura básica")
+            progress_data = {
+                'progreso': 0,
+                'estado_actual': 'Iniciando procesamiento...',
+                'completadas': 0,
+                'total': 7,
+                'galerias_completadas': 0,
+                'galerias_totales': 7
+            }
+            app.config['EXECUTION_PROGRESS'][nskey] = progress_data
         
-        return jsonify({
-            'status': 'completado' if has_results else 'procesando',
+        progreso = progress_data.get('progreso', 0)
+        estado_actual = progress_data.get('estado_actual', 'Procesando...')
+        galerias_completadas = progress_data.get('completadas', 0)
+        galerias_totales = progress_data.get('total', 7)
+        
+        print(f"DEBUG mobile_status: progreso={progreso}, estado={estado_actual}")
+        
+        # Determinar estado general
+        if has_results:
+            status = 'completado'
+        elif progreso >= 95:
+            status = 'completado'
+        else:
+            status = 'procesando'
+        
+        response_data = {
+            'status': 'success',  # Siempre success porque manejamos los errores
             'progreso': progreso,
-            'logs_recientes': logs[-10:] if logs else [],  # Últimos 10 logs
-            'has_results': has_results
-        })
+            'estado_actual': estado_actual,
+            'logs_recientes': logs[-10:] if logs else ['Esperando logs...'],
+            'has_results': has_results,
+            'galerias_completadas': galerias_completadas,
+            'galerias_totales': galerias_totales,
+            'nskey_encontrada': nskey  # Para debugging
+        }
+        
+        print(f"DEBUG mobile_status: Enviando respuesta: {response_data}")
+        return jsonify(response_data)
         
     except Exception as e:
+        error_msg = f'Error verificando estado: {str(e)}'
+        print(f"ERROR mobile_status: {error_msg}")
+        import traceback
+        traceback.print_exc()
+        
         return jsonify({
             'status': 'error',
-            'message': f'Error verificando estado: {str(e)}'
+            'message': error_msg,
+            'progreso': 0,
+            'estado_actual': 'Error en servidor',
+            'logs_recientes': [],
+            'has_results': False
         }), 500
 
+@app.route('/api/debug/check-data')
+def debug_check_data():
+    """Verifica si hay datos en la base de datos"""
+    try:
+        uk = get_or_create_user_key()
+        ejecuciones = Ejecucion.query.filter_by(user_key=uk).all()
+        
+        return jsonify({
+            "total_ejecuciones": len(ejecuciones),
+            "ejecuciones": [
+                {
+                    "id": e.id,
+                    "run_id": e.run_id,
+                    "comuna": e.comuna,
+                    "fecha": e.fecha_ejecucion.isoformat() if e.fecha_ejecucion else None,
+                    "locales_12": e.locales_12,
+                    "locales_16": e.locales_16,
+                    "locales_20": e.locales_20,
+                    "locales_25": e.locales_25
+                } for e in ejecuciones
+            ]
+        })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/debug/check-run/<run_id>')
+def debug_check_run(run_id):
+    """Verificar datos específicos de un run_id"""
+    try:
+        uk = get_or_create_user_key()
+        
+        # Verificar ejecuciones
+        ejecuciones = Ejecucion.query.filter_by(run_id=run_id, user_key=uk).all()
+        
+        # Verificar resumen
+        resumen = ResumenRun.query.filter_by(run_id=run_id, user_key=uk).first()
+        
+        return jsonify({
+            "run_id": run_id,
+            "total_ejecuciones": len(ejecuciones),
+            "ejecuciones": [
+                {
+                    "id": e.id,
+                    "comuna": e.comuna,
+                    "roi": e.roi,
+                    "inversion": e.inv_inicial_usd,
+                    "utilidad": e.utilidad_neta_usd
+                } for e in ejecuciones
+            ],
+            "resumen": {
+                "existe": resumen is not None,
+                "total_inversion": resumen.total_inversion if resumen else None,
+                "total_utilidad": resumen.total_utilidad if resumen else None,
+                "prom_roi": resumen.prom_roi if resumen else None
+            } if resumen else None
+        })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/debug/routes')
+def debug_routes():
+    """Mostrar todas las rutas registradas en Flask"""
+    routes = []
+    for rule in app.url_map.iter_rules():
+        routes.append({
+            'endpoint': rule.endpoint,
+            'methods': list(rule.methods),
+            'path': str(rule)
+        })
+    return jsonify(routes)
+
+@app.route('/api/mobile/diagnostico', methods=['GET', 'POST', 'OPTIONS'])
+def mobile_diagnostico():
+    """Endpoint de diagnóstico para probar la conexión móvil"""
+    if request.method == 'OPTIONS':
+        return jsonify({'status': 'ok'}), 200
+        
+    uk = get_or_create_user_key()
+    
+    diagnostico = {
+        "status": "success",
+        "message": "✅ Backend funcionando correctamente",
+        "user_key": uk,
+        "metodo": request.method,
+        "headers": dict(request.headers),
+        "datos_recibidos": request.get_json() if request.method == 'POST' else None,
+        "timestamp": time.time()
+    }
+    
+    print(f"🔍 Diagnóstico solicitado - User-Key: {uk}")
+    return jsonify(diagnostico)
+
+@app.route("/api/mobile/resumen-corrida", methods=["GET"])
+def mobile_resumen_corrida():
+    """Resumen de corridas para la aplicación móvil"""
+    try:
+        # Obtener user_key del header
+        user_key = request.headers.get("User-Key")
+        if not user_key:
+            return jsonify({
+                "status": "error", 
+                "message": "User-Key header requerido"
+            }), 400
+
+        # Filtros opcionales
+        only_run = (request.args.get("run_id") or "").strip()
+        limit = int(request.args.get("limit", 20) or 20)
+
+        # ResumenRun filtrado por user_key
+        q = ResumenRun.query.filter(ResumenRun.user_key == user_key)
+        
+        if only_run:
+            q = q.filter(ResumenRun.run_id == only_run)
+
+        filas = (q.order_by(ResumenRun.prom_fitness.desc(),
+                           ResumenRun.created_at.desc())
+                  .limit(limit)
+                  .all())
+
+        # Agregados por run_id (locales, áreas, ingresos/egresos)
+        aggs = (
+            db.session.query(
+                Ejecucion.run_id.label("run_id"),
+                func.coalesce(func.sum(cast(Ejecucion.locales_12, Integer)), 0).label("sum_l12"),
+                func.coalesce(func.sum(cast(Ejecucion.locales_16, Integer)), 0).label("sum_l16"),
+                func.coalesce(func.sum(cast(Ejecucion.locales_20, Integer)), 0).label("sum_l20"),
+                func.coalesce(func.sum(cast(Ejecucion.locales_25, Integer)), 0).label("sum_l25"),
+                func.coalesce(func.sum(cast(EjecucionDetalle.ar_alimentos_frescos, Integer)), 0).label("sum_ar_af"),
+                func.coalesce(func.sum(cast(EjecucionDetalle.ar_comidas_preparadas, Integer)), 0).label("sum_ar_cp"),
+                func.coalesce(func.sum(cast(EjecucionDetalle.ar_no_alimentarios, Integer)), 0).label("sum_ar_nal"),
+                func.coalesce(func.sum(cast(EjecucionDetalle.ar_complementarios, Integer)), 0).label("sum_ar_sc"),
+                func.coalesce(func.sum(EjecucionDetalle.ing_total), 0.0).label("sum_ing_total"),
+                func.coalesce(func.sum(EjecucionDetalle.egr_total), 0.0).label("sum_egr_total"),
+            )
+            .outerjoin(EjecucionDetalle, EjecucionDetalle.ejecucion_id == Ejecucion.id)
+            .filter(Ejecucion.user_key == user_key)
+            .group_by(Ejecucion.run_id)
+            .all()
+        )
+
+        aggs_map = {
+            a.run_id: {
+                "sum_l12": a.sum_l12, 
+                "sum_l16": a.sum_l16, 
+                "sum_l20": a.sum_l20, 
+                "sum_l25": a.sum_l25,
+                "sum_ar_af": a.sum_ar_af, 
+                "sum_ar_cp": a.sum_ar_cp, 
+                "sum_ar_nal": a.sum_ar_nal, 
+                "sum_ar_sc": a.sum_ar_sc,
+                "sum_ing_total": float(a.sum_ing_total or 0.0),
+                "sum_egr_total": float(a.sum_egr_total or 0.0),
+            }
+            for a in aggs
+        }
+
+        # Preparar datos para móvil
+        resumen_data = []
+        for r in filas:
+            sums = aggs_map.get(r.run_id, {
+                "sum_l12": 0, "sum_l16": 0, "sum_l20": 0, "sum_l25": 0,
+                "sum_ar_af": 0, "sum_ar_cp": 0, "sum_ar_nal": 0, 
+                "sum_ar_sc": 0,
+                "sum_ing_total": 0.0, "sum_egr_total": 0.0,
+            })
+            
+            resumen_item = {
+                "run_id": r.run_id,
+                "prom_fitness": float(r.prom_fitness or 0),
+                "prom_roi": float(r.prom_roi or 0),
+                "prom_margen": float(r.prom_margen or 0),
+                "prom_ben_social": float(r.prom_ben_social or 0),
+                "total_inversion": float(r.total_inversion or 0),
+                "total_utilidad": float(r.total_utilidad or 0),
+                "mejor_comuna_base": r.mejor_comuna_base or "-",
+                "mejor_roi_base": float(r.mejor_roi_base or 0),
+                "created_at": r.created_at.isoformat() if r.created_at else None,
+                # Agregados
+                "sum_l12": sums["sum_l12"],
+                "sum_l16": sums["sum_l16"],
+                "sum_l20": sums["sum_l20"],
+                "sum_l25": sums["sum_l25"],
+                "sum_ar_af": sums["sum_ar_af"],
+                "sum_ar_cp": sums["sum_ar_cp"],
+                "sum_ar_nal": sums["sum_ar_nal"],
+                "sum_ar_sc": sums["sum_ar_sc"],
+                "sum_ing_total": sums["sum_ing_total"],
+                "sum_egr_total": sums["sum_egr_total"],
+                "total_locales": sums["sum_l12"] + sums["sum_l16"] + sums["sum_l20"] + sums["sum_l25"]
+            }
+            resumen_data.append(resumen_item)
+
+        return jsonify({
+            "status": "success",
+            "data": resumen_data,
+            "total": len(resumen_data)
+        })
+
+    except Exception as e:
+        print(f"❌ Error en mobile_resumen_corrida: {str(e)}")
+        import traceback
+        print(f"🔍 Traceback completo: {traceback.format_exc()}")
+        return jsonify({
+            "status": "error",
+            "message": f"Error interno del servidor: {str(e)}"
+        }), 500
 # =============================================
 # FIN RUTAS ESPECÍFICAS PARA APP MÓVIL
 # =============================================
