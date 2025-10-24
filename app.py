@@ -48,13 +48,17 @@ CORS(app,
          r"/*": {
              "origins": [
                  "http://localhost:8100", 
-                 "http://localhost:4200", 
+                 "http://localhost:4200",
+                 "http://192.168.0.112:5000",
+                 "http://192.168.0.112", 
                  "capacitor://localhost", 
                  "http://localhost",
                  "https://localhost"  
              ],
              "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
              "allow_headers": ["Content-Type", "Authorization", "X-Requested-With", "Accept", "User-Key"],
+             "supports_credentials": True,
+             "max_age": 86400  # 24 horas
          }
      },
      supports_credentials=True)
@@ -92,10 +96,6 @@ def after_request(response):
     response.headers.add('X-Frame-Options', 'DENY')
     response.headers.add('X-XSS-Protection', '1; mode=block')
     response.headers.add('Strict-Transport-Security', 'max-age=31536000; includeSubDomains')
-    
-    # CORS headers adicionales
-    if request.method == 'OPTIONS':
-        response.headers.add('Access-Control-Max-Age', '86400')  # 24 horas
     
     return response
 
@@ -1986,6 +1986,134 @@ def api_mobile_resultados(run_id):
             "message": f"Error interno: {str(e)}"
         }), 500
 
+
+##Parametrizacion Original
+# # @app.route('/api/mobile/parametrizacion', methods=['POST', 'OPTIONS'])
+# # def mobile_ejecutar_parametrizacion():
+# #     """Endpoint CORREGIDO para ejecutar optimización desde la app móvil y GUARDAR en BD"""
+    
+# #     if request.method == 'OPTIONS':
+# #         return jsonify({'status':'ok'}), 200  
+    
+# #     try:
+# #         # Obtener user_key para móvil PRIMERO
+# #         uk = get_or_create_user_key()
+# #         print(f"🚀 Ejecutando parametrización para user_key: {uk}")
+        
+# #         data = request.get_json()
+# #         print(f"📨 Datos recibidos: {data}")
+
+# #         # Validar que hay datos
+# #         if not data:
+# #             return jsonify({
+# #                 "status": "error", 
+# #                 "message": "No se recibieron datos"
+# #             }), 400
+
+# #         # Extraer parámetros del request
+# #         weights = (
+# #             float(data.get('peso_be', 0.33)),
+# #             float(data.get('peso_bs', 0.33)),
+# #             float(data.get('peso_mun', 0.34))
+# #         )
+
+# #         # Crear estructura de galerías CORREGIDA
+# #         galerias_a_procesar = []
+# #         for i in range(1, 8):  # Galerías 1-7
+# #             galeria_data = {
+# #                 'numero': i,
+# #                 'comuna': i,
+# #                 'tam_lote': int(data.get(f'tam_lote_{i}', 5000)),
+# #                 'can_pri': int(data.get(f'can_pri_{i}', 2)),
+# #                 'can_sec': int(data.get(f'can_sec_{i}', 1))
+# #             }
+# #             galerias_a_procesar.append(galeria_data)
+# #             print(f"🏗️  Galería {i}: {galeria_data}")
+
+# #         # Extraer parámetros del algoritmo
+# #         population_size = int(data.get('population_size', 50))
+# #         max_generations = int(data.get('max_generations', 100))
+# #         mutation_rate = float(data.get('mutation_rate', 0.05))
+# #         crossover_rate = float(data.get('crossover_rate', 0.7))
+# #         elite_percentage = float(data.get('elite_percentage', 0.1))
+# #         sigma_factor = float(data.get('sigma_factor', 0.1))
+
+# #         parametros_algoritmo = {
+# #             'population_size': population_size,
+# #             'max_generations': max_generations,
+# #             'mutation_rate': mutation_rate,
+# #             'crossover_rate': crossover_rate,
+# #             'elite_percentage': elite_percentage,
+# #             'sigma_factor': sigma_factor
+# #         }
+
+# #         print(f"⚙️  Parámetros algoritmo: {parametros_algoritmo}")
+# #         print(f"⚖️  Pesos: {weights}")
+        
+# #         # Generar run_id único
+# #         run_id = str(uuid.uuid4())
+# #         thread_id = str(time.time())
+        
+# #         print(f"📝 IDs generados - Run: {run_id}, Thread: {thread_id}")
+
+# #         # Inicializar logs
+# #         nskey = _ns(uk, thread_id)
+# #         if 'EXECUTION_LOGS' not in app.config:
+# #             app.config['EXECUTION_LOGS'] = {}
+# #         app.config['EXECUTION_LOGS'][nskey] = []
+        
+# #         # ✅ EJECUTAR Y GUARDAR EN BD (SÍNCRONO para móvil)
+# #         try:
+# #             # OPCIÓN 1: Si la función espera "galerias_a_procesar" en lugar de "galerias"
+# #             procesar_todas_galerias(
+# #                 app=app,
+# #                 thread_id=thread_id,
+# #                 galerias_a_procesar=galerias_a_procesar,  # ← NOMBRE CORREGIDO
+# #                 population_size=population_size,
+# #                 max_generations=max_generations,
+# #                 elite_percentage=elite_percentage,
+# #                 mutation_rate=mutation_rate,
+# #                 sigma_factor=sigma_factor,
+# #                 crossover_rate=crossover_rate,
+# #                 weights=weights,
+# #                 run_id=run_id,
+# #                 user_key=uk
+# #             )
+            
+# #             # Verificar que se guardaron datos
+# #             ejecuciones_guardadas = Ejecucion.query.filter_by(run_id=run_id, user_key=uk).count()
+# #             print(f"💾 Ejecuciones guardadas en BD: {ejecuciones_guardadas}")
+            
+# #             return jsonify({
+# #                 "status": "success",
+# #                 "message": "Optimización completada y guardada en BD",
+# #                 "run_id": run_id,
+# #                 "thread_id": thread_id,
+# #                 "ejecuciones_guardadas": ejecuciones_guardadas,
+# #                 "user_key": uk
+# #             })
+            
+# #         except Exception as e:
+# #             error_msg = f"Error en procesamiento: {str(e)}"
+# #             print(f"❌ ERROR en procesar_todas_galerias: {error_msg}")
+# #             import traceback
+# #             traceback.print_exc()
+            
+# #             return jsonify({
+# #                 "status": "error",
+# #                 "message": error_msg
+# #             }), 500
+            
+# #     except Exception as e:
+# #         print(f"❌ Error en mobile_ejecutar_parametrizacion: {str(e)}")
+# #         import traceback
+# #         traceback.print_exc()
+        
+# #         return jsonify({
+# #             "status": "error", 
+# #             "message": f"Error interno: {str(e)}"
+# #         }), 500
+
 @app.route('/api/mobile/parametrizacion', methods=['POST', 'OPTIONS'])
 def mobile_ejecutar_parametrizacion():
     """Endpoint CORREGIDO para ejecutar optimización desde la app móvil y GUARDAR en BD"""
@@ -2051,56 +2179,121 @@ def mobile_ejecutar_parametrizacion():
         # Generar run_id único
         run_id = str(uuid.uuid4())
         thread_id = str(time.time())
+        nskey = f"{uk}:{thread_id}"
         
         print(f"📝 IDs generados - Run: {run_id}, Thread: {thread_id}")
 
-        # Inicializar logs
-        nskey = _ns(uk, thread_id)
+        # INICIALIZAR PROGRESO Y LOGS ANTES de iniciar el procesamiento
+        if 'EXECUTION_PROGRESS' not in app.config:
+            app.config['EXECUTION_PROGRESS'] = {}
         if 'EXECUTION_LOGS' not in app.config:
             app.config['EXECUTION_LOGS'] = {}
-        app.config['EXECUTION_LOGS'][nskey] = []
         
-        # ✅ EJECUTAR Y GUARDAR EN BD (SÍNCRONO para móvil)
-        try:
-            # OPCIÓN 1: Si la función espera "galerias_a_procesar" en lugar de "galerias"
-            procesar_todas_galerias(
-                app=app,
-                thread_id=thread_id,
-                galerias_a_procesar=galerias_a_procesar,  # ← NOMBRE CORREGIDO
-                population_size=population_size,
-                max_generations=max_generations,
-                elite_percentage=elite_percentage,
-                mutation_rate=mutation_rate,
-                sigma_factor=sigma_factor,
-                crossover_rate=crossover_rate,
-                weights=weights,
-                run_id=run_id,
-                user_key=uk
-            )
-            
-            # Verificar que se guardaron datos
-            ejecuciones_guardadas = Ejecucion.query.filter_by(run_id=run_id, user_key=uk).count()
-            print(f"💾 Ejecuciones guardadas en BD: {ejecuciones_guardadas}")
-            
-            return jsonify({
-                "status": "success",
-                "message": "Optimización completada y guardada en BD",
-                "run_id": run_id,
-                "thread_id": thread_id,
-                "ejecuciones_guardadas": ejecuciones_guardadas,
-                "user_key": uk
-            })
-            
-        except Exception as e:
-            error_msg = f"Error en procesamiento: {str(e)}"
-            print(f"❌ ERROR en procesar_todas_galerias: {error_msg}")
-            import traceback
-            traceback.print_exc()
-            
-            return jsonify({
-                "status": "error",
-                "message": error_msg
-            }), 500
+        # Configurar estado inicial
+        app.config['EXECUTION_PROGRESS'][nskey] = {
+            'progreso': 0,
+            'estado_actual': 'Iniciando procesamiento...',
+            'completadas': 0,
+            'total': 7,
+            'galerias_completadas': 0,
+            'galerias_totales': 7
+        }
+        
+        app.config['EXECUTION_LOGS'][nskey] = [
+            f"Iniciando optimización - Run ID: {run_id}",
+            f"Thread ID: {thread_id}",
+            "Preparando datos iniciales..."
+        ]
+        
+        print(f"✅ Progreso inicializado para nskey: {nskey}")
+        
+        # ✅ EJECUTAR EN SEGUNDO PLANO CON PROGRESO REAL
+        def ejecutar_optimizacion_real():
+            try:
+                # Función para actualizar progreso
+                def actualizar_progreso(progreso, estado, log=None):
+                    if nskey in app.config['EXECUTION_PROGRESS']:
+                        app.config['EXECUTION_PROGRESS'][nskey].update({
+                            'progreso': progreso,
+                            'estado_actual': estado,
+                            'completadas': min(7, int(progreso / 14.28))
+                        })
+                    
+                    if log and nskey in app.config['EXECUTION_LOGS']:
+                        app.config['EXECUTION_LOGS'][nskey].append(log)
+                        print(f"📝 [{nskey}] {log}")
+                    
+                    print(f"📊 [{nskey}] Progreso: {progreso}% - Estado: {estado}")
+                
+                # ✅ EJECUTAR DIRECTAMENTE LA FUNCIÓN REAL DE OPTIMIZACIÓN
+                print(f"🎯 Ejecutando función real de optimización...")
+                actualizar_progreso(5, 'Iniciando algoritmo genético...', 'Iniciando procesamiento real')
+                
+                # LLAMAR A LA FUNCIÓN REAL DENTRO DEL CONTEXTO DE LA APLICACIÓN
+                with app.app_context():
+                    procesar_todas_galerias(
+                        app=app,
+                        thread_id=thread_id,
+                        galerias_a_procesar=galerias_a_procesar,
+                        population_size=population_size,
+                        max_generations=max_generations,
+                        elite_percentage=elite_percentage,
+                        mutation_rate=mutation_rate,
+                        sigma_factor=sigma_factor,
+                        crossover_rate=crossover_rate,
+                        weights=weights,
+                        run_id=run_id,
+                        user_key=uk
+                    )
+                
+                # MARCO COMO 100% COMPLETADO
+                actualizar_progreso(100, 'Procesamiento completado', '✅ Optimización finalizada correctamente')
+                
+                # Verificar que se guardaron datos
+                with app.app_context():
+                    ejecuciones_guardadas = Ejecucion.query.filter_by(run_id=run_id, user_key=uk).count()
+                    print(f"💾 Ejecuciones guardadas en BD: {ejecuciones_guardadas}")
+                
+                # GUARDAR RESULTADOS
+                if 'RESULTS' not in app.config:
+                    app.config['RESULTS'] = {}
+                
+                app.config['RESULTS'][nskey] = {
+                    'status': 'success',
+                    'run_id': run_id,
+                    'thread_id': thread_id,
+                    'ejecuciones_guardadas': ejecuciones_guardadas
+                }
+                
+                print(f"✅ Optimización REAL completada - Run: {run_id}")
+                
+            except Exception as e:
+                error_msg = f'Error en procesamiento: {str(e)}'
+                print(f"❌ Error en procesamiento: {error_msg}")
+                import traceback
+                traceback.print_exc()
+                
+                if nskey in app.config['EXECUTION_LOGS']:
+                    app.config['EXECUTION_LOGS'][nskey].append(f'❌ ERROR: {error_msg}')
+                if nskey in app.config['EXECUTION_PROGRESS']:
+                    app.config['EXECUTION_PROGRESS'][nskey]['progreso'] = 0
+                    app.config['EXECUTION_PROGRESS'][nskey]['estado_actual'] = f'Error: {str(e)}'
+        
+        # INICIAR EN SEGUNDO PLANO
+        import threading
+        thread = threading.Thread(target=ejecutar_optimizacion_real)
+        thread.daemon = True
+        thread.start()
+        
+        # Respuesta inmediata al frontend
+        return jsonify({
+            "status": "success",
+            "message": "Optimización iniciada en segundo plano",
+            "run_id": run_id,
+            "thread_id": thread_id,
+            "ejecuciones_guardadas": 0,  # Aún no se han guardado
+            "user_key": uk
+        })
             
     except Exception as e:
         print(f"❌ Error en mobile_ejecutar_parametrizacion: {str(e)}")
@@ -2112,77 +2305,153 @@ def mobile_ejecutar_parametrizacion():
             "message": f"Error interno: {str(e)}"
         }), 500
 
+# # @app.route('/api/mobile/estado/<thread_id>', methods=['GET'])
+# # def mobile_status(thread_id):
+# #     """Verificar estado del procesamiento - MEJORADO"""
+# #     try:
+# #         print(f"DEBUG mobile_status: Buscando progress para thread_id={thread_id}")
+        
+# #         # OBTENER USER_KEY PRIMERO
+# #         uk = get_or_create_user_key()
+# #         nskey = f"{uk}:{thread_id}"
+        
+# #         print(f"DEBUG mobile_status: user_key={uk}, nskey={nskey}")
+        
+# #         # INICIALIZAR SI NO EXISTE
+# #         if 'EXECUTION_PROGRESS' not in app.config:
+# #             app.config['EXECUTION_PROGRESS'] = {}
+# #             print("DEBUG: EXECUTION_PROGRESS inicializado")
+        
+# #         if 'EXECUTION_LOGS' not in app.config:
+# #             app.config['EXECUTION_LOGS'] = {}
+# #             print("DEBUG: EXECUTION_LOGS inicializado")
+        
+# #         # BUSCAR DIRECTAMENTE CON LA CLAVE CORRECTA
+# #         progress_data = app.config['EXECUTION_PROGRESS'].get(nskey, {})
+# #         logs = app.config.get('EXECUTION_LOGS', {}).get(nskey, [])
+# #         has_results = 'RESULTS' in app.config and nskey in app.config['RESULTS']
+        
+# #         # Si no hay datos de progreso, crear estructura básica
+# #         if not progress_data:
+# #             print(f"DEBUG: No se encontró progress_data para {nskey}, creando estructura básica")
+# #             progress_data = {
+# #                 'progreso': 0,
+# #                 'estado_actual': 'Iniciando procesamiento...',
+# #                 'completadas': 0,
+# #                 'total': 7,
+# #                 'galerias_completadas': 0,
+# #                 'galerias_totales': 7
+# #             }
+# #             app.config['EXECUTION_PROGRESS'][nskey] = progress_data
+        
+# #         progreso = progress_data.get('progreso', 0)
+# #         estado_actual = progress_data.get('estado_actual', 'Procesando...')
+# #         galerias_completadas = progress_data.get('completadas', 0)
+# #         galerias_totales = progress_data.get('total', 7)
+        
+# #         print(f"DEBUG mobile_status: progreso={progreso}, estado={estado_actual}")
+        
+# #         # ✅ CORREGIDO: Solo marcar como completado cuando realmente termine
+# #         # No marcar como completado solo por tener resultados o progreso alto
+# #         if has_results and progreso >= 95:
+# #             status = 'completado'
+# #         elif progreso >= 100:  # Solo cuando llegue explícitamente a 100%
+# #             status = 'completado'
+# #         else:
+# #             status = 'procesando'
+        
+# #         response_data = {
+# #             'status': 'success',
+# #             'progreso': progreso,
+# #             'estado_actual': estado_actual,
+# #             'logs_recientes': logs[-10:] if logs else ['Esperando logs...'],
+# #             'has_results': has_results,
+# #             'galerias_completadas': galerias_completadas,
+# #             'galerias_totales': galerias_totales,
+# #             'nskey_encontrada': nskey
+# #         }
+        
+# #         print(f"DEBUG mobile_status: Enviando respuesta: {response_data}")
+# #         return jsonify(response_data)
+        
+# #     except Exception as e:
+# #         error_msg = f'Error verificando estado: {str(e)}'
+# #         print(f"ERROR mobile_status: {error_msg}")
+# #         import traceback
+# #         traceback.print_exc()
+        
+# #         return jsonify({
+# #             'status': 'error',
+# #             'message': error_msg,
+# #             'progreso': 0,
+# #             'estado_actual': 'Error en servidor',
+# #             'logs_recientes': [],
+# #             'has_results': False
+# #         }), 500
+
 @app.route('/api/mobile/estado/<thread_id>', methods=['GET'])
 def mobile_status(thread_id):
-    """Verificar estado del procesamiento - CORREGIDO"""
+    """Verificar estado del procesamiento - SOLO PROGRESO REAL"""
     try:
-        print(f"DEBUG mobile_status: Buscando progress para thread_id={thread_id}")
-        
-        # OBTENER USER_KEY PRIMERO
         uk = get_or_create_user_key()
         nskey = f"{uk}:{thread_id}"
         
-        print(f"DEBUG mobile_status: user_key={uk}, nskey={nskey}")
+        print(f"🔍 Consultando estado para: {nskey}")
         
         # INICIALIZAR SI NO EXISTE
         if 'EXECUTION_PROGRESS' not in app.config:
             app.config['EXECUTION_PROGRESS'] = {}
-            print("DEBUG: EXECUTION_PROGRESS inicializado")
+            print("⚠️  EXECUTION_PROGRESS inicializado")
         
         if 'EXECUTION_LOGS' not in app.config:
             app.config['EXECUTION_LOGS'] = {}
-            print("DEBUG: EXECUTION_LOGS inicializado")
+            print("⚠️  EXECUTION_LOGS inicializado")
         
-        # BUSCAR DIRECTAMENTE CON LA CLAVE CORRECTA
+        # OBTENER DATOS ACTUALES
         progress_data = app.config['EXECUTION_PROGRESS'].get(nskey, {})
         logs = app.config.get('EXECUTION_LOGS', {}).get(nskey, [])
         has_results = 'RESULTS' in app.config and nskey in app.config['RESULTS']
         
-        # Si no hay datos de progreso, crear estructura básica
+        # Si no existe, crear estructura básica
         if not progress_data:
-            print(f"DEBUG: No se encontró progress_data para {nskey}, creando estructura básica")
+            print(f"⚠️  No se encontró progress_data para {nskey}, creando estructura básica")
             progress_data = {
                 'progreso': 0,
-                'estado_actual': 'Iniciando procesamiento...',
+                'estado_actual': 'Esperando inicio del procesamiento...',
                 'completadas': 0,
-                'total': 7,
-                'galerias_completadas': 0,
-                'galerias_totales': 7
+                'total': 7
             }
             app.config['EXECUTION_PROGRESS'][nskey] = progress_data
         
         progreso = progress_data.get('progreso', 0)
         estado_actual = progress_data.get('estado_actual', 'Procesando...')
         galerias_completadas = progress_data.get('completadas', 0)
-        galerias_totales = progress_data.get('total', 7)
         
-        print(f"DEBUG mobile_status: progreso={progreso}, estado={estado_actual}")
+        print(f"📊 Estado actual - Progreso: {progreso}%, Estado: {estado_actual}, Galerías: {galerias_completadas}/7")
         
-        # Determinar estado general
-        if has_results:
-            status = 'completado'
-        elif progreso >= 95:
+        # Determinar estado general - SOLO completado cuando sea 100%
+        if progreso >= 100:
             status = 'completado'
         else:
             status = 'procesando'
         
         response_data = {
-            'status': 'success',  # Siempre success porque manejamos los errores
+            'status': 'success',
             'progreso': progreso,
             'estado_actual': estado_actual,
-            'logs_recientes': logs[-10:] if logs else ['Esperando logs...'],
+            'logs_recientes': logs[-20:] if logs else ['Esperando inicio del procesamiento...'],
             'has_results': has_results,
             'galerias_completadas': galerias_completadas,
-            'galerias_totales': galerias_totales,
-            'nskey_encontrada': nskey  # Para debugging
+            'galerias_totales': 7,
+            'nskey': nskey
         }
         
-        print(f"DEBUG mobile_status: Enviando respuesta: {response_data}")
+        print(f"✅ Enviando respuesta - Progreso: {progreso}%")
         return jsonify(response_data)
         
     except Exception as e:
         error_msg = f'Error verificando estado: {str(e)}'
-        print(f"ERROR mobile_status: {error_msg}")
+        print(f"❌ ERROR mobile_status: {error_msg}")
         import traceback
         traceback.print_exc()
         
@@ -2191,7 +2460,7 @@ def mobile_status(thread_id):
             'message': error_msg,
             'progreso': 0,
             'estado_actual': 'Error en servidor',
-            'logs_recientes': [],
+            'logs_recientes': [f'Error: {error_msg}'],
             'has_results': False
         }), 500
 
@@ -2415,4 +2684,4 @@ if __name__ == '__main__':
         app.config['RESULTS'] = {}
         print("RESULTS inicializado")
 
-    app.run(debug=True, threaded=True)
+    app.run(host="0.0.0.0",port=5000,debug=True, threaded=True)
